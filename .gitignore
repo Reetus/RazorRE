@@ -21,3 +21,14 @@
 *.i*86
 *.x86_64
 *.hex
+/Crypt/Debug
+/Crypt/ipch/crypt-d344ca3c
+/Loader/Debug
+/Loader/*.sdf
+/Loader/ipch/loader-2387f866
+/Loader/Release
+/Output
+/TesterWindow/bin/Debug
+/TesterWindow/bin/Release
+/TesterWindow/obj/Debug
+/TesterWindow/obj/Release
