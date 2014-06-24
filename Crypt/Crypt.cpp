@@ -56,40 +56,43 @@ const size_t server_packet_lengths[0x100] = {
 	0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, // 0xF8
 };
 
-const int client_packet_lengths[0x100] = /* From http://ruosi.org/packetguide/index.xml */
-{
-	/* 00 */  104,   5,   7,   0,  -1,   5,   5,   7,  15,   5,  -1,  -1,  -1,  -1,  -1,  -1,
-	/* 10 */   -1,  -1,   0,  10,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,   5,  -1,  -1,
-	/* 20 */   -1,  -1,   3,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
-	/* 30 */   -1,  -1,  -1,  -1,  10,  -1,  -1,  -1,  -1,  -1,   0,   0,  -1,  -1,  -1,  -1,
-	/* 40 */   -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
-	/* 50 */   -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  73,  -1,  -1,
-	/* 60 */   -1,  -1,  -1,  -1,  -1,  -1,   0,  -1,  -1,  -1,  -1,  -1,  19,  -1,  -1,  -1,
-	/* 70 */   -1,   0,   5,   2,  -1,  35,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
-	/* 80 */   62,  -1,  -1,  39,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
-	/* 90 */   -1,  65,  -1,  -1,  -1,  -1,  -1,  -1,   0,  -1,   0, 258,  -1,  -1,  -1,  -1,
-	/* A0 */    3,  -1,  -1,  -1,  -1,  -1,  -1,   4,  -1,  -1,  -1,   0,  -1,   0,  -1,  -1,
-	/* B0 */   -1,   0,  -1,   0,  -1,  64,   9,  -1,   0,  -1,  -1,  -1,  -1,   0,   0,   0,
-	/* C0 */   -1,  -1,   0,  -1,  -1,  -1,  -1,  -1,   2,   6,   6,  -1,  -1,  -1,  -1,  -1,
-	/* D0 */   -1,   1,  -1,  -1,   0,  -1,   0,   0,  -1, 268,   0,  -1,  -1,  -1,  -1,  -1,
-	/* E0 */    0,   0,  -1,  -1,   0,  -1,  -1,  -1,  13,  -1,  -1,   0,   0,   0,  -1,  21,
-	/* F0 */    0,   9,  -1,  -1,   0,  -1,  -1,  -1, 106,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
-};
+//const int client_packet_lengths[0x100] = /* From http://ruosi.org/packetguide/index.xml */
+//{
+//	/* 00 */  104,   5,   7,   0,  -1,   5,   5,   7,  15,   5,  -1,  -1,  -1,  -1,  -1,  -1,
+//	/* 10 */   -1,  -1,   0,  10,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,   5,  -1,  -1,
+//	/* 20 */   -1,  -1,   3,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+//	/* 30 */   -1,  -1,  -1,  -1,  10,  -1,  -1,  -1,  -1,  -1,   0,   0,  -1,  -1,  -1,  -1,
+//	/* 40 */   -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+//	/* 50 */   -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  73,  -1,  -1,
+//	/* 60 */   -1,  -1,  -1,  -1,  -1,  -1,   0,  -1,  -1,  -1,  -1,  -1,  19,  -1,  -1,  -1,
+//	/* 70 */   -1,   0,   5,   2,  -1,  35,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+//	/* 80 */   62,  -1,  -1,  39,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+//	/* 90 */   -1,  65,  -1,  -1,  -1,  -1,  -1,  -1,   0,  -1,   0, 258,  -1,  -1,  -1,  -1,
+//	/* A0 */    3,  -1,  -1,  -1,  -1,  -1,  -1,   4,  -1,  -1,  -1,   0,  -1,   0,  -1,  -1,
+//	/* B0 */   -1,   0,  -1,   0,  -1,  64,   9,  -1,   0,  -1,  -1,  -1,  -1,   0,   0,   0,
+//	/* C0 */   -1,  -1,   0,  -1,  -1,  -1,  -1,  -1,   2,   6,   6,  -1,  -1,  -1,  -1,  -1,
+//	/* D0 */   -1,   1,  -1,  -1,   0,  -1,   0,   0,  -1, 268,   0,  -1,  -1,  -1,  -1,  -1,
+//	/* E0 */    0,   0,  -1,  -1,   0,  -1,  -1,  -1,  13,  -1,  -1,   0,   0,   0,  -1,  21,
+//	/* F0 */    0,   9,  -1,  -1,   0,  -1,  -1,  -1, 106,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+//};
 
 void SendOutgoingBuffer()
 {
 	WaitForSingleObject(mutex, -1);
 	char tmp[128];
-	while (dataBuffer->outSend.Length > 0) 
+	if (dataBuffer->outSend.Length > 0) 
 	{
 		char *outbuff;
 		char *buff = (dataBuffer->outSend.Buff0+dataBuffer->outSend.Start);
 
-		int len = GetClientPacketLength(buff, dataBuffer->outSend.Length);
+		int len = GetPacketLength(buff, dataBuffer->outSend.Length);
 		if (len > dataBuffer->outSend.Length || len <= 0)
 		{
-			break;
+			return;
 		}		
+
+		LogPacket("Client -> Server", buff, len);
+		dataBuffer->totalOut+=len;
 
 		dataBuffer->outSend.Start += len;
 		dataBuffer->outSend.Length -= len;
@@ -130,6 +133,8 @@ int WINAPI newSelect(int nfds, fd_set *readfds, fd_set *writefds, fd_set *except
 				memcpy(decomBuffer, recvBuffer, size);
 				decomSize = size;
 			}
+
+			dataBuffer->totalIn+=size;
 
 			WaitForSingleObject(mutex, -1);
 			memcpy((dataBuffer->inRecv.Buff0+(dataBuffer->inRecv.Start + dataBuffer->inRecv.Length)), decomBuffer, decomSize);
@@ -181,11 +186,16 @@ int WINAPI newClosesocket(SOCKET s)
 	mustDecompress = false;
 	serverSocket = 0;
 	ReleaseMutex(mutex);
+
+//	PostMessageA(razorhWnd, 0x401, UONET_NOTREADY, 0);
+//	PostMessageA(razorhWnd, 0x401, UONET_DISCONNECT, 0);
+
 	return ret;
 }
 
 int WINAPI newConnect(SOCKET s, const struct sockaddr *name, int namelen)
 {
+	PostMessageA(razorhWnd, 0x401, UONET_CONNECT, 0);
 	serverSocket = s;
 	if (dataAddress != NULL) 
 	{
@@ -220,6 +230,9 @@ int WINAPI newRecv(SOCKET s, char *buf, int buflen, int flags)
 		if (((unsigned char*)buff)[0] == (unsigned char)0xB9)
 		{
 			mustCompress = true;
+
+			//TODO: Find out when this is really sent
+			PostMessageA(razorhWnd, 0x401, UONET_READY, 0);
 		}
 
 		//		LogPacket("newRecv()", (char*)ptr, len);
@@ -325,8 +338,8 @@ int version_sprintf(char *buffer, const char *fmt, char *val)
 }
 
 extern "C" void __declspec(dllexport) __cdecl OnAttach() {
-//	AllocConsole();
-//	consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+	AllocConsole();
+	consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 	clientProcessId = GetCurrentProcessId();
 	CreateCommunicationMutex();
 	InstallApiHooks();
@@ -779,14 +792,14 @@ extern "C" void __declspec(dllexport) DoFeatures(int features)
 	//TODO
 }
 
-extern "C" int __declspec(dllexport) GetClientPacketLength(char *buffer, int bufferlength)
-{
-	if (client_packet_lengths[(unsigned char)buffer[0]] == 0 && bufferlength > 3) {
-		return (((BYTE)buffer[1] << 8) | ((BYTE)buffer[2]));
-	}
-
-	return client_packet_lengths[(unsigned char)buffer[0]];
-}
+//extern "C" int __declspec(dllexport) GetClientPacketLength(char *buffer, int bufferlength)
+//{
+//	if (client_packet_lengths[(unsigned char)buffer[0]] == 0 && bufferlength > 3) {
+//		return (((BYTE)buffer[1] << 8) | ((BYTE)buffer[2]));
+//	}
+//
+//	return client_packet_lengths[(unsigned char)buffer[0]];
+//}
 
 
 extern "C" int __declspec(dllexport) GetPacketLength(char *buffer, int bufferlength)
