@@ -12,7 +12,8 @@ void LogPrintf(char *fmt, ...)
 	char buf[16384];
 	va_list args;
 	va_start(args, fmt);
-	sprintf(buf, fmt, args);
+	vsprintf(buf, fmt, args);
+	va_end(args);
 	Log(buf);
 }
 

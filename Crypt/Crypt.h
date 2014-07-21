@@ -1,5 +1,8 @@
+#pragma once
 #include <stdio.h>
 #include "Hooks.h"
+#include "Memory.h"
+#include "Log.h"
 
 #define SHARED_BUFF_SIZE = 524288;
 
@@ -29,6 +32,9 @@ struct DataBuffer
 	char deathMsg[16];
 	int totalIn;
 	int totalOut;
+	int gameSizeX;
+	int gameSizeY;
+	struct PacketInfo *packetTable;
 };
 
 enum UONetMessage
@@ -49,7 +55,7 @@ enum UONetMessage
 	DLL_Error = 14,
 	DeathMsg = 15,
 	OpenRPV = 18,
-	SetGameSize = 19,
+	UONET_SETGAMESIZE = 19,
 	FindData = 20,
 	SmartCPU = 21,
 	Negotiate = 22,
@@ -72,10 +78,6 @@ enum INIT_ERROR
 };
 
 HMODULE thishModule;
-
-extern "C" void __declspec(dllexport) Log(char*data);
-extern "C" void __declspec(dllexport) LogPacket(char *msg, char *packet, int packetlen);
-void LogPrintf(char *fmt, ...);
 
 extern "C" void __declspec(dllexport) WaitForWindow(DWORD hProcess);
 extern "C" INIT_ERROR __declspec(dllexport) InstallLibrary(HWND razorhwnd, int clientprocid, int flags);

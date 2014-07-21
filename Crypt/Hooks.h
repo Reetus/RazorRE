@@ -1,3 +1,4 @@
+#pragma once
 #include "stdafx.h"
 
 int HookFunc(char *dllName, char *funcName, void *newFunc, FARPROC *oldFunc);

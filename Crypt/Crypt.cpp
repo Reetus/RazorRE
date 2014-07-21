@@ -20,6 +20,7 @@ int recvBufferPosition = 0;
 SOCKET serverSocket;
 struct DataBuffer *dataBuffer;
 HWND uoAssistHwnd;
+struct PacketInfo{ UINT id, unknown, len; };
 
 const size_t server_packet_lengths[0x100] = {
 	0x0068, 0x0005, 0x0007, 0x0000, 0x0002, 0x0005, 0x0005, 0x0007, // 0x00
@@ -91,7 +92,7 @@ void SendOutgoingBuffer()
 			return;
 		}		
 
-		LogPacket("Client -> Server", buff, len);
+		//LogPacket("Client -> Server", buff, len);
 		dataBuffer->totalOut+=len;
 
 		dataBuffer->outSend.Start += len;
@@ -102,8 +103,7 @@ void SendOutgoingBuffer()
 		memcpy(outbuff, buff, len);
 
 		oldSend(serverSocket, outbuff, len, 0);
-		//sprintf(tmp, "SendOutgoingBuffer(): Sending packet ID = %02X, Length = %d\r\n", (unsigned char)buff[0], len);
-		//Log(tmp);	
+
 		free(outbuff);
 	}
 	ReleaseMutex(mutex);
@@ -163,7 +163,6 @@ int WINAPI newSelect(int nfds, fd_set *readfds, fd_set *writefds, fd_set *except
 	//	WaitForSingleObject(mutex, -1);
 	if (dataBuffer->outRecv.Length > 0)
 	{
-		//Log("newSelect() return FD_SET from outRecv\r\n");
 		FD_SET(serverSocket, readfds);
 		ret = ret + 1;
 	}
@@ -175,7 +174,6 @@ int WINAPI newSelect(int nfds, fd_set *readfds, fd_set *writefds, fd_set *except
 
 int WINAPI newClosesocket(SOCKET s)
 {
-	//Log("newClosesocket called\r\n");
 	int ret = oldClosesocket(s);
 	WaitForSingleObject(mutex, -1);
 	//memset(dataBuffer->inRecv.Buff0, 0, 524288);
@@ -187,8 +185,8 @@ int WINAPI newClosesocket(SOCKET s)
 	serverSocket = 0;
 	ReleaseMutex(mutex);
 
-//	PostMessageA(razorhWnd, 0x401, UONET_NOTREADY, 0);
-//	PostMessageA(razorhWnd, 0x401, UONET_DISCONNECT, 0);
+	//	PostMessageA(razorhWnd, 0x401, UONET_NOTREADY, 0);
+	//	PostMessageA(razorhWnd, 0x401, UONET_DISCONNECT, 0);
 
 	return ret;
 }
@@ -235,8 +233,6 @@ int WINAPI newRecv(SOCKET s, char *buf, int buflen, int flags)
 			PostMessageA(razorhWnd, 0x401, UONET_READY, 0);
 		}
 
-		//		LogPacket("newRecv()", (char*)ptr, len);
-
 		if (mustCompress) {
 			comlen = uo_compress((unsigned char*)buffer, 16384, (unsigned char*)buff, len);
 		} else
@@ -251,6 +247,7 @@ int WINAPI newRecv(SOCKET s, char *buf, int buflen, int flags)
 		WaitForSingleObject(mutex, -1);
 		dataBuffer->outRecv.Start += len;
 		dataBuffer->outRecv.Length -= len;
+		//		LogPacket("Server -> Client", (char*)buffer, comlen);
 		ReleaseMutex(mutex);
 	}
 
@@ -279,7 +276,6 @@ int WINAPI newSend(SOCKET s, const char *buf, int len, int flags)
 		dataBuffer->inSend.Length+=mysize;
 
 		if ((char)mybuff[0] == (char)0x91) {
-			//Log("Setting mustDecompress to true\r\n");
 			uo_decompression_init(&decompress);
 			mustDecompress = true;
 		}
@@ -292,48 +288,10 @@ int WINAPI newSend(SOCKET s, const char *buf, int len, int flags)
 	return ret;
 }
 
-BOOL FindSignatureOffset(char *signature, int siglength, char *buffer, int buflen, int *offset)
-{
-	char *base = buffer;
-	bool found = false;
-
-	int size = buflen;
-	for (int x = 0; x < size; x++)
-	{
-		char *ptr = base++;
-		if (memcmp(ptr, signature, siglength) == 0)
-		{
-			found = true;
-			*offset = (int)((char*)ptr-(char*)buffer);
-			break;
-		}
-	}
-	return found;
-}
-
-
-BOOL FindSignatureAddress(char *signature, char *buffer, int sigsize, int bufsize, int *address)
-{
-	BOOL found = false;
-
-
-	for (int x = 0; x < (bufsize - sigsize);x++)
-	{
-		char *ptr = (char*)((BYTE*)buffer++);
-		if (memcmp(ptr, signature, sigsize) == 0)
-		{
-			found = true;
-			*address = (int)ptr;
-			break;
-		}
-	}
-	return found;
-}
-
 int version_sprintf(char *buffer, const char *fmt, char *val)
 {
 	strcpy(dataBuffer->clientVersion, val);
-	//Log(dataBuffer->clientVersion);
+	Log(dataBuffer->clientVersion);
 	return sprintf(buffer, fmt, val);
 }
 
@@ -352,14 +310,21 @@ extern "C" void __declspec(dllexport) __cdecl OnAttach() {
 
 	for (int i = 0; i < inh->FileHeader.NumberOfSections;i++)
 	{
-		if (_stricmp((char*)ish->Name, ".rdata") == 0) 
+		if (_stricmp((char*)ish->Name, ".data") == 0) 
 		{
 			int position = ish->VirtualAddress;
 			int size = ish->Misc.VirtualSize;
 
+
 			char uoVer[] = "UO Version %s";
 			char *ptr = (char*)thisModule+position;
 			int address;
+
+			char sig[] =
+			{
+				0x6A, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00
+			};
+
 			if (FindSignatureAddress(uoVer, ptr, strlen(uoVer), size, &address))
 			{
 				char findBytes[] = { 0x68, address, (address >> 8), (address >> 16), (address >> 24) };
@@ -446,12 +411,33 @@ void CreateCommunicationMutex()
 
 void ProcessWindowMessage(int code, WPARAM wParam, LPARAM lParam) 
 {
-	WaitForSingleObject(mutex, -1);
-	SendOutgoingBuffer();
-	ReleaseMutex(mutex);
-
-	if (code == 0x400)
+	switch (code) 
+	{
+	case 0x400:
 		razorhWnd = (HWND)lParam;
+		break;
+	case 0x401:
+		{
+			LogPrintf("ProcessWindowMessage: code = %x, wParam = %d, lParam = %d\r\n", code, wParam, lParam);
+			switch (wParam) 
+			{
+			case UONET_SEND:
+				WaitForSingleObject(mutex, -1);
+				SendOutgoingBuffer();
+				ReleaseMutex(mutex);
+				break;
+			case UONET_SETGAMESIZE:
+				// TODO
+				int x = (short)(lParam);
+				int y = (short)(lParam>>16);
+				LogPrintf("SetGameSize: %dx%d\r\n", x, y);
+				dataBuffer->gameSizeX = x;
+				dataBuffer->gameSizeY = y;
+				break;
+			}
+			break;
+		}
+	}
 }
 
 LRESULT CALLBACK CallWndHook(int code,WPARAM wParam,LPARAM lParam)
@@ -468,9 +454,9 @@ LRESULT CALLBACK CallWndHook(int code,WPARAM wParam,LPARAM lParam)
 LRESULT CALLBACK GetMessageHook(int code,WPARAM wParam,LPARAM lParam)
 {
 	MSG *msg = (MSG*)lParam;
-	if (msg->message == 0x400)
+	if (msg->message == 0x400 || msg->message == 0x401)
 	{
-		ProcessWindowMessage(msg->message, wParam, msg->lParam);
+		ProcessWindowMessage(msg->message, msg->wParam, msg->lParam);
 	}
 	return CallNextHookEx(0, code, wParam, lParam);
 }
@@ -682,8 +668,8 @@ extern "C" int __declspec(dllexport) HandleNegotiate(unsigned long features)
 
 extern "C" int __declspec(dllexport) InitializeLibrary(char *version)
 {
-//	AllocConsole();
-//	consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+	//	AllocConsole();
+	//	consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 
 	return 1;
 }
@@ -712,6 +698,7 @@ extern "C" int __declspec(dllexport) TotalOut()
 	return dataBuffer->totalOut;
 }
 
+#pragma region Translate Functions, untested
 extern "C" void __declspec(dllexport) TranslateSetup(TRANSLATESETUP *ptr)
 {
 	if (ptr != NULL)
@@ -729,7 +716,7 @@ extern "C" void __declspec(dllexport) TranslateDo(TRANSLATEDO *ptr, char *intext
 	if (ptr != NULL)
 		(*ptr)(intext, outtext, len);
 }
-
+#pragma endregion
 
 extern "C" void __declspec(dllexport) SetDeathMsg(char *msg)
 {
@@ -781,6 +768,7 @@ extern "C" __declspec(dllexport) BOOL IsCalibrated()
 	return false;
 }
 
+#pragma region TODO: CaptureScreen, DoFeatures
 extern "C" int __declspec(dllexport) CaptureScreen(BOOL isFullScreen, char* message)
 {
 	//TODO
@@ -791,16 +779,7 @@ extern "C" void __declspec(dllexport) DoFeatures(int features)
 {
 	//TODO
 }
-
-//extern "C" int __declspec(dllexport) GetClientPacketLength(char *buffer, int bufferlength)
-//{
-//	if (client_packet_lengths[(unsigned char)buffer[0]] == 0 && bufferlength > 3) {
-//		return (((BYTE)buffer[1] << 8) | ((BYTE)buffer[2]));
-//	}
-//
-//	return client_packet_lengths[(unsigned char)buffer[0]];
-//}
-
+#pragma endregion
 
 extern "C" int __declspec(dllexport) GetPacketLength(char *buffer, int bufferlength)
 {
@@ -808,11 +787,21 @@ extern "C" int __declspec(dllexport) GetPacketLength(char *buffer, int bufferlen
 		return (((BYTE)buffer[1] << 8) | ((BYTE)buffer[2]));
 	}
 
+	//unsigned char packet = buffer[0];
+	//UINT len = dataBuffer->packetTable[packet].len;
+	//if (len == 0x8000)
+	//	len = *((USHORT *)(buffer + 1));
+	//	return len;
+
 	return server_packet_lengths[(unsigned char)buffer[0]];
 }
 
 extern "C" BOOL __declspec(dllexport) IsDynLength(char packetid)
 {
+	//UINT len = dataBuffer->packetTable[packetid].len;
+	//if (len == 0x8000)
+	//	return true;
+	//return false;
 	if (server_packet_lengths[(unsigned char)packetid] == (unsigned char)0)
 	{
 		return true;
