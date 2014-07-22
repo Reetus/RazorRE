@@ -9,7 +9,6 @@ HWND clienthWnd;
 HWND razorhWnd;
 int clientProcessId;
 HANDLE mutex = 0;
-void *dataAddress;
 HANDLE fileMapping;
 HANDLE consoleHandle;
 struct uo_decompression decompress;
@@ -195,14 +194,16 @@ int WINAPI newConnect(SOCKET s, const struct sockaddr *name, int namelen)
 {
 	PostMessageA(razorhWnd, 0x401, UONET_CONNECT, 0);
 	serverSocket = s;
-	if (dataAddress != NULL) 
+	if (dataBuffer != NULL) 
 	{
 		sockaddr_in newsockaddr;
 		newsockaddr.sin_family = AF_INET;
-		dataBuffer->serverIp = 0x0100007f;
-		dataBuffer->serverPort = 0x0a21;
+		//dataBuffer->serverIp = 0x0100007f;
+		//dataBuffer->serverPort = 0x0a21;
 		newsockaddr.sin_addr.s_addr = dataBuffer->serverIp;
 		newsockaddr.sin_port = htons(dataBuffer->serverPort);
+		unsigned char *ptr = (unsigned char*)&dataBuffer->serverIp;
+		LogPrintf("newConnect: %d.%d.%d.%d,2593\r\n", ptr[0], ptr[1], ptr[2], ptr[3], dataBuffer->serverPort);
 		return oldConnect(s, (SOCKADDR *)&newsockaddr, sizeof(newsockaddr));
 	}
 	return oldConnect(s, name, namelen);
@@ -356,11 +357,6 @@ extern "C" void __declspec(dllexport) __cdecl OnAttach() {
 		}
 		ish = (IMAGE_SECTION_HEADER*)((BYTE*)ish + sizeof(IMAGE_SECTION_HEADER));
 	}
-	WaitForSingleObject(mutex, -1);
-	dataBuffer->serverIp = 0x0100007f;
-	dataBuffer->serverPort = 0x0a21;
-	ReleaseMutex(mutex);
-
 }
 
 extern "C" HWND __declspec(dllexport) FindUOWindow() 
@@ -391,20 +387,19 @@ void CreateCommunicationMutex()
 	if ((mutex = CreateMutexA(0, 0, mutexname)) != NULL) 
 	{
 		sprintf_s(mappingname, "UONetSharedFM_%x", clientProcessId);
-		if ((fileMapping = CreateFileMappingA(INVALID_HANDLE_VALUE, 0, PAGE_READWRITE, 0, 0x200776, mappingname)) != NULL)
+		if ((fileMapping = CreateFileMappingA(INVALID_HANDLE_VALUE, 0, PAGE_READWRITE, 0, sizeof(struct DataBuffer), mappingname)) != NULL)
 		{
 			dataBuffer = (struct DataBuffer *)MapViewOfFile(fileMapping, FILE_MAP_ALL_ACCESS, 0, 0, 0);
 			if (dataBuffer == NULL)
-				MessageBoxA(0, "MapView failed", 0, 0);
-			dataAddress = dataBuffer;
+				Log("MapView failed\r\n");
 		}
 		else
 		{
-			MessageBoxA(0, "CreateFileMapping failed", 0, 0);
+			Log("CreateFileMapping failed\r\n");
 		}
 	} else
 	{
-		MessageBoxA(0, "Mutex failed", 0, 0);
+		Log("Mutex failed\r\n");
 	}
 
 }
@@ -603,19 +598,18 @@ extern "C" INIT_ERROR __declspec(dllexport) InstallLibrary(HWND razorhwnd, int c
 	ShowWindow(uoAssistHwnd, 0);
 
 	PostMessageA(clienthWnd, 0x400, flags, (LPARAM)razorhwnd);
-
 	return SUCCESS;
 }
 
 extern "C" LPVOID __declspec(dllexport) GetSharedAddress() 
 {
-	return dataAddress;
+	return dataBuffer;
 }
 
 extern "C" void __declspec(dllexport) SetServer(UINT serverIp, USHORT serverPort) 
 {
 	//Log("SetServer called\r\n");
-	if (dataAddress != NULL)
+	if (dataBuffer != NULL)
 	{
 		dataBuffer->serverIp = serverIp;
 		dataBuffer->serverPort = serverPort;
@@ -629,7 +623,7 @@ extern "C" HANDLE __declspec(dllexport) GetCommMutex()
 
 extern "C" void __declspec(dllexport) SetDataPath(char *path) 
 {
-	if (dataAddress != NULL)
+	if (dataBuffer != NULL)
 	{
 		WaitForSingleObject(mutex, -1);
 		strncpy_s(dataBuffer->clientDataPath, 256, path, 256);
@@ -639,7 +633,7 @@ extern "C" void __declspec(dllexport) SetDataPath(char *path)
 
 extern "C" void __declspec(dllexport) SetAllowDisconn(BOOL allow)
 {
-	if (dataAddress != NULL && mutex != NULL) 
+	if (dataBuffer != NULL && mutex != NULL) 
 	{
 		WaitForSingleObject(mutex, -1);
 		dataBuffer->allowDisconn = allow;

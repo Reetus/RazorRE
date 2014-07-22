@@ -1,4 +1,5 @@
 #pragma once
+#pragma pack(1)
 #include <stdio.h>
 #include "Hooks.h"
 #include "Memory.h"
@@ -21,7 +22,7 @@ struct DataBuffer
 	struct Buffer outSend; //2097184 0x200020
 	char titleBar[128];
 	BOOL allowDisconn;
-	char clientDataPath[136];
+	char clientDataPath[256];
 	int serverIp;
 	u_short serverPort;
 	char clientVersion[128];
