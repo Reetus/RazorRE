@@ -14,6 +14,13 @@ struct Buffer
 	char Buff0[524288];
 };
 
+struct ClientPacketInfo
+{
+	UINT id;
+	UINT unknown;
+	UINT length;
+};
+
 struct DataBuffer
 {
 	struct Buffer inRecv; // 524296 0x80008
@@ -35,7 +42,7 @@ struct DataBuffer
 	int totalOut;
 	int gameSizeX;
 	int gameSizeY;
-	struct PacketInfo *packetTable;
+	short packetTable[0x100];
 };
 
 enum UONetMessage

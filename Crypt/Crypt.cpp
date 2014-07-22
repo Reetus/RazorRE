@@ -19,62 +19,6 @@ int recvBufferPosition = 0;
 SOCKET serverSocket;
 struct DataBuffer *dataBuffer;
 HWND uoAssistHwnd;
-struct PacketInfo{ UINT id, unknown, len; };
-
-const size_t server_packet_lengths[0x100] = {
-	0x0068, 0x0005, 0x0007, 0x0000, 0x0002, 0x0005, 0x0005, 0x0007, // 0x00
-	0x000e, 0x0005, 0x0007, 0x0007, 0x0000, 0x0003, 0x0000, 0x003d, // 0x08
-	0x00d7, 0x0000, 0x0000, 0x000a, 0x0006, 0x0009, 0x0001, 0x0000, // 0x10
-	0x0000, 0x0000, 0x0000, 0x0025, 0x0000, 0x0005, 0x0004, 0x0008, // 0x18
-	0x0013, 0x0008, 0x0003, 0x001a, 0x0009, 0x0015, 0x0005, 0x0002, // 0x20
-	0x0005, 0x0001, 0x0005, 0x0002, 0x0002, 0x0011, 0x000f, 0x000a, // 0x28
-	0x0005, 0x0001, 0x0002, 0x0002, 0x000a, 0x028d, 0x0000, 0x0008, // 0x30
-	0x0007, 0x0009, 0x0000, 0x0000, 0x0000, 0x0002, 0x0025, 0x0000, // 0x38
-	0x00c9, 0x0000, 0x0000, 0x0229, 0x02c9, 0x0005, 0x0000, 0x000b, // 0x40
-	0x0049, 0x005d, 0x0005, 0x0009, 0x0000, 0x0000, 0x0006, 0x0002, // 0x48
-	0x0000, 0x0000, 0x0000, 0x0002, 0x000c, 0x0001, 0x000b, 0x006e, // 0x50
-	0x006a, 0x0000, 0x0000, 0x0004, 0x0002, 0x0049, 0x0000, 0x0031, // 0x58
-	0x0005, 0x0009, 0x000f, 0x000d, 0x0001, 0x0004, 0x0000, 0x0015, // 0x60
-	0x0000, 0x0000, 0x0003, 0x0009, 0x0013, 0x0003, 0x000e, 0x0000, // 0x68
-	0x001c, 0x0000, 0x0005, 0x0002, 0x0000, 0x0023, 0x0010, 0x0011, // 0x70
-	0x0000, 0x0009, 0x0000, 0x0002, 0x0000, 0x000d, 0x0002, 0x0000, // 0x78
-	0x003e, 0x0000, 0x0002, 0x0027, 0x0045, 0x0002, 0x0000, 0x0000, // 0x80
-	0x0042, 0x0000, 0x0000, 0x0000, 0x000b, 0x0000, 0x0000, 0x0000, // 0x88
-	0x0013, 0x0041, 0x0000, 0x0063, 0x0000, 0x0009, 0x0000, 0x0002, // 0x90
-	0x0000, 0x001e, 0x0000, 0x0102, 0x0135, 0x0033, 0x0000, 0x0000, // 0x98
-	0x0003, 0x0009, 0x0009, 0x0009, 0x0095, 0x0000, 0x0000, 0x0004, // 0xA0
-	0x0000, 0x0000, 0x0005, 0x0000, 0x0000, 0x0000, 0x0000, 0x000d, // 0xA8
-	0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0040, 0x0009, 0x0000, // 0xB0
-	0x0000, 0x0005, 0x0006, 0x0009, 0x0003, 0x0000, 0x0000, 0x0000, // 0xB8
-	0x0024, 0x0000, 0x0000, 0x0000, 0x0006, 0x00cb, 0x0001, 0x0031, // 0xC0
-	0x0002, 0x0006, 0x0006, 0x0007, 0x0000, 0x0001, 0x0000, 0x004e, // 0xC8
-	0x0000, 0x0002, 0x0019, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, // 0xD0
-	0x0000, 0x010C, 0xFFFF, 0xFFFF, 0x0009, 0x0000, 0xFFFF, 0xFFFF, // 0xD8
-	0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, // 0xE0
-	0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0x0015, // 0xE8
-	0x0000, 0x0009, 0xFFFF, 0x001a, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, // 0xF0
-	0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, // 0xF8
-};
-
-//const int client_packet_lengths[0x100] = /* From http://ruosi.org/packetguide/index.xml */
-//{
-//	/* 00 */  104,   5,   7,   0,  -1,   5,   5,   7,  15,   5,  -1,  -1,  -1,  -1,  -1,  -1,
-//	/* 10 */   -1,  -1,   0,  10,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,   5,  -1,  -1,
-//	/* 20 */   -1,  -1,   3,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
-//	/* 30 */   -1,  -1,  -1,  -1,  10,  -1,  -1,  -1,  -1,  -1,   0,   0,  -1,  -1,  -1,  -1,
-//	/* 40 */   -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
-//	/* 50 */   -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  73,  -1,  -1,
-//	/* 60 */   -1,  -1,  -1,  -1,  -1,  -1,   0,  -1,  -1,  -1,  -1,  -1,  19,  -1,  -1,  -1,
-//	/* 70 */   -1,   0,   5,   2,  -1,  35,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
-//	/* 80 */   62,  -1,  -1,  39,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
-//	/* 90 */   -1,  65,  -1,  -1,  -1,  -1,  -1,  -1,   0,  -1,   0, 258,  -1,  -1,  -1,  -1,
-//	/* A0 */    3,  -1,  -1,  -1,  -1,  -1,  -1,   4,  -1,  -1,  -1,   0,  -1,   0,  -1,  -1,
-//	/* B0 */   -1,   0,  -1,   0,  -1,  64,   9,  -1,   0,  -1,  -1,  -1,  -1,   0,   0,   0,
-//	/* C0 */   -1,  -1,   0,  -1,  -1,  -1,  -1,  -1,   2,   6,   6,  -1,  -1,  -1,  -1,  -1,
-//	/* D0 */   -1,   1,  -1,  -1,   0,  -1,   0,   0,  -1, 268,   0,  -1,  -1,  -1,  -1,  -1,
-//	/* E0 */    0,   0,  -1,  -1,   0,  -1,  -1,  -1,  13,  -1,  -1,   0,   0,   0,  -1,  21,
-//	/* F0 */    0,   9,  -1,  -1,   0,  -1,  -1,  -1, 106,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
-//};
 
 void SendOutgoingBuffer()
 {
@@ -142,10 +86,6 @@ int WINAPI newSelect(int nfds, fd_set *readfds, fd_set *writefds, fd_set *except
 			if ((BYTE)decomBuffer[0] == (BYTE)0xB9)
 				mustCompress = true;
 
-			//struct Buffer *outRecv = (struct Buffer *)((BYTE*)dataAddress+524296);
-			//memcpy((BYTE*)(((BYTE*)&outRecv->Buff0)+(outRecv->Start + outRecv->Length)), decomBuffer, decomSize);
-			//outRecv->Length+=decomSize;
-
 			ReleaseMutex(mutex);
 
 			PostMessageA(razorhWnd, 0x401, UONET_RECV, 0);
@@ -175,10 +115,6 @@ int WINAPI newClosesocket(SOCKET s)
 {
 	int ret = oldClosesocket(s);
 	WaitForSingleObject(mutex, -1);
-	//memset(dataBuffer->inRecv.Buff0, 0, 524288);
-	//memset(dataBuffer->outRecv.Buff0, 0, 524288);
-	//memset(dataBuffer->inSend.Buff0, 0, 524288);
-	//memset(dataBuffer->outSend.Buff0, 0, 524288);
 
 	mustDecompress = false;
 	serverSocket = 0;
@@ -198,8 +134,6 @@ int WINAPI newConnect(SOCKET s, const struct sockaddr *name, int namelen)
 	{
 		sockaddr_in newsockaddr;
 		newsockaddr.sin_family = AF_INET;
-		//dataBuffer->serverIp = 0x0100007f;
-		//dataBuffer->serverPort = 0x0a21;
 		newsockaddr.sin_addr.s_addr = dataBuffer->serverIp;
 		newsockaddr.sin_port = htons(dataBuffer->serverPort);
 		unsigned char *ptr = (unsigned char*)&dataBuffer->serverIp;
@@ -311,21 +245,14 @@ extern "C" void __declspec(dllexport) __cdecl OnAttach() {
 
 	for (int i = 0; i < inh->FileHeader.NumberOfSections;i++)
 	{
-		if (_stricmp((char*)ish->Name, ".data") == 0) 
+		if (_stricmp((char*)ish->Name, ".rdata") == 0) 
 		{
 			int position = ish->VirtualAddress;
 			int size = ish->Misc.VirtualSize;
 
-
 			char uoVer[] = "UO Version %s";
 			char *ptr = (char*)thisModule+position;
 			int address;
-
-			char sig[] =
-			{
-				0x6A, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00
-			};
-
 			if (FindSignatureAddress(uoVer, ptr, strlen(uoVer), size, &address))
 			{
 				char findBytes[] = { 0x68, address, (address >> 8), (address >> 16), (address >> 24) };
@@ -357,6 +284,48 @@ extern "C" void __declspec(dllexport) __cdecl OnAttach() {
 		}
 		ish = (IMAGE_SECTION_HEADER*)((BYTE*)ish + sizeof(IMAGE_SECTION_HEADER));
 	}
+
+	idh = (IMAGE_DOS_HEADER*)thisModule;
+	inh = (IMAGE_NT_HEADERS*)((BYTE*)thisModule + idh->e_lfanew);
+	ish = (IMAGE_SECTION_HEADER*)((BYTE*)thisModule + idh->e_lfanew + sizeof(IMAGE_NT_HEADERS));
+
+	for (int i = 0; i < inh->FileHeader.NumberOfSections;i++)
+	{
+		if (_stricmp((char*)ish->Name, ".data") == 0) 
+		{
+			int position = ish->VirtualAddress;
+			int size = ish->Misc.VirtualSize;
+			char *ptr = (char*)thisModule+position;
+			LogPrintf(".data position = %x\r\n", ptr);
+			int offset = 0;
+
+			// Get packet size table, lifted from https://github.com/jaryn-kubik/UOInterface/blob/master/UOInterface/PacketHooks.cpp
+			unsigned char sig[] =
+			{
+				0x01, 0x00, 0x00, 0x00, 0xCC, 0xCC, 0xCC, 0xCC, 0x05, 0x00, 0x00, 0x00, //packet 1, unknown, len 5
+				0x02, 0x00, 0x00, 0x00, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, //packet 2, unknown, len ...
+				0x03, 0x00, 0x00, 0x00, 0xCC, 0xCC, 0xCC, 0xCC, 0x00, //0x80, 0x00, 0x00  //packet 3, unknown, len 0x8000 (dynamic)
+			};
+
+			if (FindSignatureAddressWildcard(sig, sizeof(sig), ptr, size, 0xCC, &offset))
+			{
+				struct ClientPacketInfo *pt = ((struct ClientPacketInfo*)offset)-1;
+				
+				for (UINT unknown = pt->unknown;pt->unknown == unknown;pt++)
+				{
+					dataBuffer->packetTable[pt->id] = pt->length;
+//					LogPrintf("ID: %x, Length = %x\r\n", pt->id, pt->length);
+				}
+			} 
+			else
+			{
+				Log("Error: Cannot locate packet table.\r\n");
+			}
+			break;
+		}
+		ish = (IMAGE_SECTION_HEADER*)((BYTE*)ish + sizeof(IMAGE_SECTION_HEADER));
+	}
+
 }
 
 extern "C" HWND __declspec(dllexport) FindUOWindow() 
@@ -608,7 +577,6 @@ extern "C" LPVOID __declspec(dllexport) GetSharedAddress()
 
 extern "C" void __declspec(dllexport) SetServer(UINT serverIp, USHORT serverPort) 
 {
-	//Log("SetServer called\r\n");
 	if (dataBuffer != NULL)
 	{
 		dataBuffer->serverIp = serverIp;
@@ -777,29 +745,20 @@ extern "C" void __declspec(dllexport) DoFeatures(int features)
 
 extern "C" int __declspec(dllexport) GetPacketLength(char *buffer, int bufferlength)
 {
-	if (server_packet_lengths[(unsigned char)buffer[0]] == 0 && bufferlength > 3) {
-		return (((BYTE)buffer[1] << 8) | ((BYTE)buffer[2]));
-	}
+	short len = dataBuffer->packetTable[(unsigned char)buffer[0]];
+	if (len == (short)0x8000)
+		len = (((BYTE)buffer[1] << 8) | ((BYTE)buffer[2]));
 
-	//unsigned char packet = buffer[0];
-	//UINT len = dataBuffer->packetTable[packet].len;
-	//if (len == 0x8000)
-	//	len = *((USHORT *)(buffer + 1));
-	//	return len;
+	//LogPrintf("Packet Id %x, len = %x\r\n", buffer[0], len);
 
-	return server_packet_lengths[(unsigned char)buffer[0]];
+	return len;
 }
 
 extern "C" BOOL __declspec(dllexport) IsDynLength(char packetid)
 {
-	//UINT len = dataBuffer->packetTable[packetid].len;
-	//if (len == 0x8000)
-	//	return true;
-	//return false;
-	if (server_packet_lengths[(unsigned char)packetid] == (unsigned char)0)
-	{
+	short len = dataBuffer->packetTable[(unsigned char)packetid];
+	if (len == (short)0x8000)
 		return true;
-	}
 	return false;
 }
 

@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "Log.h"
 
 BOOL FindSignatureOffset(char *signature, int siglength, char *buffer, int buflen, int *offset)
 {
@@ -19,21 +20,23 @@ BOOL FindSignatureOffset(char *signature, int siglength, char *buffer, int bufle
 	return found;
 }
 
-//BOOL FindMoo(char *signature, int sigsize, char *buffer, int bufsize, int *offset)
-//{
-//	for (int x = 0; x < (bufsize - sigsize);x++)
-//	{
-//		char *ptr = (char*)((BYTE*)buffer++);
-//		for (int i = 0; i < sigsize; i++)
-//		{
-//			if (signature[i] != 0xCC && (BYTE)signature[i] != (BYTE)ptr)
-//				break;
-//			if (i == sigsize - 1)
-//				return true;
-//		}
-//	}
-//	return false;
-//}
+BOOL FindSignatureAddressWildcard(unsigned char *signature, int sigsize, char *buffer, int bufsize, unsigned char wildcard, int *offset)
+{
+	char *ptr;
+	for (ptr = buffer; ptr < (buffer+bufsize);ptr++) 
+	{
+		for (unsigned int i = 0; i < (sigsize+1); i++)
+		{
+			if ((signature[i] != wildcard) && signature[i] != ptr[i])
+				break;
+			if (i == sigsize) {
+				*offset = (int)ptr;
+				return true;	
+			}
+		}
+	}
+	return false;
+}
 
 BOOL FindSignatureAddress(char *signature, char *buffer, int sigsize, int bufsize, int *address)
 {
