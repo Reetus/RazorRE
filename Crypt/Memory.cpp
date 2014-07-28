@@ -1,15 +1,15 @@
 #include "stdafx.h"
 #include "Log.h"
 
-BOOL FindSignatureOffset(char *signature, int siglength, char *buffer, int buflen, int *offset)
+BOOL FindSignatureOffset(PUCHAR signature, int siglength, PUCHAR buffer, int buflen, int *offset)
 {
-	char *base = buffer;
+	unsigned char *base = buffer;
 	bool found = false;
 
 	int size = buflen;
 	for (int x = 0; x < size; x++)
 	{
-		char *ptr = base++;
+		unsigned char *ptr = base++;
 		if (memcmp(ptr, signature, siglength) == 0)
 		{
 			found = true;
@@ -20,12 +20,12 @@ BOOL FindSignatureOffset(char *signature, int siglength, char *buffer, int bufle
 	return found;
 }
 
-BOOL FindSignatureAddressWildcard(unsigned char *signature, int sigsize, char *buffer, int bufsize, unsigned char wildcard, int *offset)
+BOOL FindSignatureAddressWildcard(PUCHAR signature, int sigsize, PUCHAR buffer, int bufsize, UCHAR wildcard, int *offset)
 {
-	char *ptr;
+	unsigned char *ptr;
 	for (ptr = buffer; ptr < (buffer+bufsize);ptr++) 
 	{
-		for (unsigned int i = 0; i < (sigsize+1); i++)
+		for (int i = 0; i < (sigsize+1); i++)
 		{
 			if ((signature[i] != wildcard) && signature[i] != ptr[i])
 				break;
@@ -38,7 +38,7 @@ BOOL FindSignatureAddressWildcard(unsigned char *signature, int sigsize, char *b
 	return false;
 }
 
-BOOL FindSignatureAddress(char *signature, char *buffer, int sigsize, int bufsize, int *address)
+BOOL FindSignatureAddress(PUCHAR signature, PUCHAR buffer, int sigsize, int bufsize, int *address)
 {
 	BOOL found = false;
 

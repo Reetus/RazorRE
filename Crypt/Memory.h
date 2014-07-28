@@ -1,5 +1,5 @@
 #pragma once
 
-BOOL FindSignatureOffset(char *signature, int siglength, char *buffer, int buflen, int *offset);
-BOOL FindSignatureAddress(char *signature, char *buffer, int sigsize, int bufsize, int *address);
-BOOL FindSignatureAddressWildcard(unsigned char *signature, int sigsize, char *buffer, int bufsize, unsigned char wildcard, int *offset);
+BOOL FindSignatureOffset(PUCHAR signature, int siglength, PUCHAR buffer, int buflen, int *offset);
+BOOL FindSignatureAddress(PUCHAR signature, PUCHAR buffer, int sigsize, int bufsize, int *address);
+BOOL FindSignatureAddressWildcard(PUCHAR signature, int sigsize, PUCHAR buffer, int bufsize, UCHAR wildcard, int *offset);

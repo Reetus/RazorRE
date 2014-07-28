@@ -4,10 +4,13 @@
 #include "stdafx.h"
 #include "Crypt.h"
 #include "Compression.h"
+#include "Misc.h"
 
+// Globals
+HMODULE thishModule;
 HWND clienthWnd;
 HWND razorhWnd;
-int clientProcessId;
+DWORD clientProcessId;
 HANDLE mutex = 0;
 HANDLE fileMapping;
 HANDLE consoleHandle;
@@ -19,17 +22,18 @@ int recvBufferPosition = 0;
 SOCKET serverSocket;
 struct DataBuffer *dataBuffer;
 HWND uoAssistHwnd;
+RECT titleRect;
 
-void SendOutgoingBuffer()
+VOID SendOutgoingBuffer()
 {
 	WaitForSingleObject(mutex, -1);
-	char tmp[128];
+
 	if (dataBuffer->outSend.Length > 0) 
 	{
-		char *outbuff;
-		char *buff = (dataBuffer->outSend.Buff0+dataBuffer->outSend.Start);
+		PUCHAR outbuff;
+		PUCHAR buff = (dataBuffer->outSend.Buff0+dataBuffer->outSend.Start);
 
-		int len = GetPacketLength(buff, dataBuffer->outSend.Length);
+		DWORD len = GetPacketLength(buff, dataBuffer->outSend.Length);
 		if (len > dataBuffer->outSend.Length || len <= 0)
 		{
 			return;
@@ -41,186 +45,16 @@ void SendOutgoingBuffer()
 		dataBuffer->outSend.Start += len;
 		dataBuffer->outSend.Length -= len;
 
-		outbuff = (char*)malloc(len);
+		outbuff = new UCHAR[len];//(PUCHAR)malloc(len);
 
 		memcpy(outbuff, buff, len);
 
-		oldSend(serverSocket, outbuff, len, 0);
+		oldSend(serverSocket, (PCHAR)outbuff, len, 0);
 
-		free(outbuff);
+		//free(outbuff);
+		delete[] outbuff;
 	}
 	ReleaseMutex(mutex);
-}
-
-int WINAPI newSelect(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, const struct timeval *timeout)
-{
-	if (readfds->fd_array[0] != NULL) {
-		serverSocket = readfds->fd_array[0];
-		SendOutgoingBuffer();
-		fd_set mySet;
-		FD_ZERO(&mySet);
-		FD_SET(serverSocket, &mySet);
-		timeval myTimeout;
-		myTimeout.tv_usec = 1000;
-
-		int val = oldSelect(1, &mySet, 0, 0, &myTimeout);
-		if (val > 0)
-		{
-			char recvBuffer[16384];
-			char decomBuffer[16384];
-			int decomSize = 0;
-			int size = oldRecv(serverSocket, recvBuffer, 16384, 0);
-			if (mustDecompress) {
-				decomSize = (int)uo_decompress(&decompress, (unsigned char *)decomBuffer, 16384, (unsigned char *)recvBuffer, size);
-			} else {
-				memcpy(decomBuffer, recvBuffer, size);
-				decomSize = size;
-			}
-
-			dataBuffer->totalIn+=size;
-
-			WaitForSingleObject(mutex, -1);
-			memcpy((dataBuffer->inRecv.Buff0+(dataBuffer->inRecv.Start + dataBuffer->inRecv.Length)), decomBuffer, decomSize);
-			dataBuffer->inRecv.Length+=decomSize;
-
-			if ((BYTE)decomBuffer[0] == (BYTE)0xB9)
-				mustCompress = true;
-
-			ReleaseMutex(mutex);
-
-			PostMessageA(razorhWnd, 0x401, UONET_RECV, 0);
-		}
-	}
-	int ret = oldSelect(nfds, readfds, writefds, exceptfds, timeout);
-
-	if (FD_ISSET(serverSocket, readfds))
-	{
-		ret -= 1;
-		FD_CLR(serverSocket, readfds);
-	}
-
-	//	WaitForSingleObject(mutex, -1);
-	if (dataBuffer->outRecv.Length > 0)
-	{
-		FD_SET(serverSocket, readfds);
-		ret = ret + 1;
-	}
-	//	ReleaseMutex(mutex);
-
-
-	return ret;
-}
-
-int WINAPI newClosesocket(SOCKET s)
-{
-	int ret = oldClosesocket(s);
-	WaitForSingleObject(mutex, -1);
-
-	mustDecompress = false;
-	serverSocket = 0;
-	ReleaseMutex(mutex);
-
-	//	PostMessageA(razorhWnd, 0x401, UONET_NOTREADY, 0);
-	//	PostMessageA(razorhWnd, 0x401, UONET_DISCONNECT, 0);
-
-	return ret;
-}
-
-int WINAPI newConnect(SOCKET s, const struct sockaddr *name, int namelen)
-{
-	PostMessageA(razorhWnd, 0x401, UONET_CONNECT, 0);
-	serverSocket = s;
-	if (dataBuffer != NULL) 
-	{
-		sockaddr_in newsockaddr;
-		newsockaddr.sin_family = AF_INET;
-		newsockaddr.sin_addr.s_addr = dataBuffer->serverIp;
-		newsockaddr.sin_port = htons(dataBuffer->serverPort);
-		unsigned char *ptr = (unsigned char*)&dataBuffer->serverIp;
-		LogPrintf("newConnect: %d.%d.%d.%d,2593\r\n", ptr[0], ptr[1], ptr[2], ptr[3], dataBuffer->serverPort);
-		return oldConnect(s, (SOCKADDR *)&newsockaddr, sizeof(newsockaddr));
-	}
-	return oldConnect(s, name, namelen);
-}
-
-int WINAPI newRecv(SOCKET s, char *buf, int buflen, int flags)
-{
-	int written = 0;
-
-	if (dataBuffer->outRecv.Length > 0) 
-	{
-		char buffer[16384];
-		char tmp[128];
-		int comlen = 0;
-
-		char *buff = dataBuffer->outRecv.Buff0+dataBuffer->outRecv.Start;
-		int len = GetPacketLength(buff, dataBuffer->outRecv.Length);
-		if (len <= 0)
-		{			
-			return 0;
-		}
-
-		if (((unsigned char*)buff)[0] == (unsigned char)0xB9)
-		{
-			mustCompress = true;
-
-			//TODO: Find out when this is really sent
-			PostMessageA(razorhWnd, 0x401, UONET_READY, 0);
-		}
-
-		if (mustCompress) {
-			comlen = uo_compress((unsigned char*)buffer, 16384, (unsigned char*)buff, len);
-		} else
-		{
-			memcpy(buffer, buff, len);
-			comlen = len;
-		}
-
-		memcpy(buf, buffer, comlen);
-		written += comlen;
-
-		WaitForSingleObject(mutex, -1);
-		dataBuffer->outRecv.Start += len;
-		dataBuffer->outRecv.Length -= len;
-		//		LogPacket("Server -> Client", (char*)buffer, comlen);
-		ReleaseMutex(mutex);
-	}
-
-	return written;
-}
-
-
-int WINAPI newSend(SOCKET s, const char *buf, int len, int flags)
-{
-	char mybuff[16384];
-	int mybuff_size;
-	int mysize = 0;
-
-	char tmp[128];
-	int ret = len;
-
-	if (len > 3 && (int)buf > 0x40000000 /* Kludge, what are the send()'s with stack addresses? */) {
-		WaitForSingleObject(mutex, -1);
-
-		memcpy(mybuff, buf, len);
-		mysize = len;
-
-		char *ptr = (dataBuffer->inSend.Buff0 + (dataBuffer->inSend.Start+dataBuffer->inSend.Length));
-
-		memcpy(ptr, mybuff, mysize);
-		dataBuffer->inSend.Length+=mysize;
-
-		if ((char)mybuff[0] == (char)0x91) {
-			uo_decompression_init(&decompress);
-			mustDecompress = true;
-		}
-
-		ReleaseMutex(mutex);
-		PostMessageA(razorhWnd, 0x401, UONET_SEND, 0);
-	} else {
-		ret = oldSend(s, buf, len, flags);
-	}
-	return ret;
 }
 
 int version_sprintf(char *buffer, const char *fmt, char *val)
@@ -230,7 +64,7 @@ int version_sprintf(char *buffer, const char *fmt, char *val)
 	return sprintf(buffer, fmt, val);
 }
 
-extern "C" void __declspec(dllexport) __cdecl OnAttach() {
+extern "C" VOID __declspec(dllexport) __cdecl OnAttach() {
 	AllocConsole();
 	consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 	clientProcessId = GetCurrentProcessId();
@@ -250,20 +84,20 @@ extern "C" void __declspec(dllexport) __cdecl OnAttach() {
 			int position = ish->VirtualAddress;
 			int size = ish->Misc.VirtualSize;
 
-			char uoVer[] = "UO Version %s";
-			char *ptr = (char*)thisModule+position;
+			UCHAR uoVer[] = "UO Version %s";
+			PUCHAR ptr = (PUCHAR)thisModule+position;
 			int address;
-			if (FindSignatureAddress(uoVer, ptr, strlen(uoVer), size, &address))
+			if (FindSignatureAddress(uoVer, ptr, strlen((PCHAR)uoVer), size, &address))
 			{
-				char findBytes[] = { 0x68, address, (address >> 8), (address >> 16), (address >> 24) };
+				UCHAR findBytes[] = { 0x68, address, (address >> 8), (address >> 16), (address >> 24) };
 
 				ish = (IMAGE_SECTION_HEADER*)((BYTE*)thisModule + idh->e_lfanew + sizeof(IMAGE_NT_HEADERS));
-				ptr = (char*)thisModule+ish->VirtualAddress;
+				ptr = (PUCHAR)thisModule+ish->VirtualAddress;
 
 				if (FindSignatureAddress(findBytes, ptr, 5, ish->Misc.VirtualSize, &address)) 
 				{
 					int offset = (address-(int)ptr)+6;
-					ptr = (char*)ptr+offset;
+					ptr = (PUCHAR)ptr+offset;
 
 					if ((unsigned char)*ptr == (unsigned char)0xE8)
 					{
@@ -285,47 +119,46 @@ extern "C" void __declspec(dllexport) __cdecl OnAttach() {
 		ish = (IMAGE_SECTION_HEADER*)((BYTE*)ish + sizeof(IMAGE_SECTION_HEADER));
 	}
 
-	idh = (IMAGE_DOS_HEADER*)thisModule;
-	inh = (IMAGE_NT_HEADERS*)((BYTE*)thisModule + idh->e_lfanew);
-	ish = (IMAGE_SECTION_HEADER*)((BYTE*)thisModule + idh->e_lfanew + sizeof(IMAGE_NT_HEADERS));
+	GetPacketTable();
 
-	for (int i = 0; i < inh->FileHeader.NumberOfSections;i++)
+}
+
+/// Get packet size table, lifted from https://github.com/jaryn-kubik/UOInterface/blob/master/UOInterface/PacketHooks.cpp
+BOOL GetPacketTable()
+{
+	DWORD sectionAddress, sectionSize;
+
+	if (GetPESectionAddress(".data", &sectionAddress, &sectionSize))
 	{
-		if (_stricmp((char*)ish->Name, ".data") == 0) 
+		PUCHAR thisModule = (PUCHAR)GetModuleHandleA(NULL);
+		PUCHAR ptr = thisModule+sectionAddress;
+		int offset;
+
+		unsigned char sig[] =
 		{
-			int position = ish->VirtualAddress;
-			int size = ish->Misc.VirtualSize;
-			char *ptr = (char*)thisModule+position;
-			LogPrintf(".data position = %x\r\n", ptr);
-			int offset = 0;
+			0x01, 0x00, 0x00, 0x00, 0xCC, 0xCC, 0xCC, 0xCC, 0x05, 0x00, 0x00, 0x00, //packet 1, unknown, len 5
+			0x02, 0x00, 0x00, 0x00, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, //packet 2, unknown, len ...
+			0x03, 0x00, 0x00, 0x00, 0xCC, 0xCC, 0xCC, 0xCC, 0x00, //0x80, 0x00, 0x00  //packet 3, unknown, len 0x8000 (dynamic)
+		};
 
-			// Get packet size table, lifted from https://github.com/jaryn-kubik/UOInterface/blob/master/UOInterface/PacketHooks.cpp
-			unsigned char sig[] =
-			{
-				0x01, 0x00, 0x00, 0x00, 0xCC, 0xCC, 0xCC, 0xCC, 0x05, 0x00, 0x00, 0x00, //packet 1, unknown, len 5
-				0x02, 0x00, 0x00, 0x00, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, //packet 2, unknown, len ...
-				0x03, 0x00, 0x00, 0x00, 0xCC, 0xCC, 0xCC, 0xCC, 0x00, //0x80, 0x00, 0x00  //packet 3, unknown, len 0x8000 (dynamic)
-			};
+		if (FindSignatureAddressWildcard(sig, sizeof(sig), ptr, sectionSize, 0xCC, &offset))
+		{
+			struct ClientPacketInfo *pt = ((struct ClientPacketInfo*)offset)-1;
 
-			if (FindSignatureAddressWildcard(sig, sizeof(sig), ptr, size, 0xCC, &offset))
+			for (UINT unknown = pt->unknown;pt->unknown == unknown;pt++)
 			{
-				struct ClientPacketInfo *pt = ((struct ClientPacketInfo*)offset)-1;
-				
-				for (UINT unknown = pt->unknown;pt->unknown == unknown;pt++)
-				{
-					dataBuffer->packetTable[pt->id] = pt->length;
-//					LogPrintf("ID: %x, Length = %x\r\n", pt->id, pt->length);
-				}
-			} 
-			else
-			{
-				Log("Error: Cannot locate packet table.\r\n");
+				dataBuffer->packetTable[pt->id] = pt->length;
+				//LogPrintf("ID: 0x%x, Length = 0x%x\r\n", pt->id, pt->length);
 			}
-			break;
-		}
-		ish = (IMAGE_SECTION_HEADER*)((BYTE*)ish + sizeof(IMAGE_SECTION_HEADER));
-	}
 
+			return true;
+		} 
+		else
+		{
+			Log("Error: Cannot locate packet table.\r\n");
+		}
+	}
+	return false;
 }
 
 extern "C" HWND __declspec(dllexport) FindUOWindow() 
@@ -337,7 +170,7 @@ extern "C" HWND __declspec(dllexport) FindUOWindow()
 	return FindWindowA("Ultima Online", 0);
 }
 
-extern "C" void __declspec(dllexport) WaitForWindow(DWORD dwProcessId) 
+extern "C" VOID __declspec(dllexport) WaitForWindow(DWORD dwProcessId) 
 {
 	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, NULL, dwProcessId);
 	do {
@@ -346,17 +179,17 @@ extern "C" void __declspec(dllexport) WaitForWindow(DWORD dwProcessId)
 	CloseHandle(hProcess);
 }
 
-void CreateCommunicationMutex() 
+VOID CreateCommunicationMutex() 
 {
-	char mutexname[256];
-	char mappingname[256];
+	CHAR mutexName[256];
+	CHAR mappingName[256];
 	mutex = 0;
-	sprintf_s(mutexname, "UONetSharedCOMM_%x", clientProcessId);
+	sprintf_s(mutexName, "UONetSharedCOMM_%x", clientProcessId);
 
-	if ((mutex = CreateMutexA(0, 0, mutexname)) != NULL) 
+	if ((mutex = CreateMutexA(0, 0, mutexName)) != NULL) 
 	{
-		sprintf_s(mappingname, "UONetSharedFM_%x", clientProcessId);
-		if ((fileMapping = CreateFileMappingA(INVALID_HANDLE_VALUE, 0, PAGE_READWRITE, 0, sizeof(struct DataBuffer), mappingname)) != NULL)
+		sprintf_s(mappingName, "UONetSharedFM_%x", clientProcessId);
+		if ((fileMapping = CreateFileMappingA(INVALID_HANDLE_VALUE, 0, PAGE_READWRITE, 0, sizeof(struct DataBuffer), mappingName)) != NULL)
 		{
 			dataBuffer = (struct DataBuffer *)MapViewOfFile(fileMapping, FILE_MAP_ALL_ACCESS, 0, 0, 0);
 			if (dataBuffer == NULL)
@@ -373,7 +206,8 @@ void CreateCommunicationMutex()
 
 }
 
-void ProcessWindowMessage(int code, WPARAM wParam, LPARAM lParam) 
+#pragma region Window Message Hooks/Functions
+VOID ProcessWindowMessage(int code, WPARAM wParam, LPARAM lParam) 
 {
 	switch (code) 
 	{
@@ -382,23 +216,45 @@ void ProcessWindowMessage(int code, WPARAM wParam, LPARAM lParam)
 		break;
 	case 0x401:
 		{
-			LogPrintf("ProcessWindowMessage: code = %x, wParam = %d, lParam = %d\r\n", code, wParam, lParam);
+			//LogPrintf("ProcessWindowMessage: code = %x, wParam = %d, lParam = %d\r\n", code, wParam, lParam);
 			switch (wParam) 
 			{
 			case UONET_SEND:
-				WaitForSingleObject(mutex, -1);
-				SendOutgoingBuffer();
-				ReleaseMutex(mutex);
-				break;
+				{
+					WaitForSingleObject(mutex, -1);
+					SendOutgoingBuffer();
+					ReleaseMutex(mutex);
+					break;
+				}
 			case UONET_SETGAMESIZE:
-				// TODO
-				int x = (short)(lParam);
-				int y = (short)(lParam>>16);
-				LogPrintf("SetGameSize: %dx%d\r\n", x, y);
-				dataBuffer->gameSizeX = x;
-				dataBuffer->gameSizeY = y;
-				break;
+				{
+					// TODO
+					int x = (short)(lParam);
+					int y = (short)(lParam>>16);
+					LogPrintf("SetGameSize: %dx%d\r\n", x, y);
+					dataBuffer->gameSizeX = x;
+					dataBuffer->gameSizeY = y;
+					break;
+				}
+			case UONET_LOGMESSAGE:
+				{
+					WaitForSingleObject(mutex, -1);
+					DWORD length = dataBuffer->logMessage.Length;
+					PCHAR tmpBuffer = new CHAR[length+1];
+					strcpy_s(tmpBuffer, length+1, (PCHAR)(dataBuffer->logMessage.Buff0+dataBuffer->logMessage.Start));
+					Log(tmpBuffer);
+					dataBuffer->logMessage.Start += length;
+					dataBuffer->logMessage.Length -= length;
+					delete[] tmpBuffer;
+					ReleaseMutex(mutex);
+					break;
+				}
 			}
+			break;
+		}
+	case 0x402:
+		{
+			LogPrintf("Title Bar Update: %s\r\n", dataBuffer->titleBar);
 			break;
 		}
 	}
@@ -407,6 +263,13 @@ void ProcessWindowMessage(int code, WPARAM wParam, LPARAM lParam)
 LRESULT CALLBACK CallWndHook(int code,WPARAM wParam,LPARAM lParam)
 {
 	CWPSTRUCT *cwps = (CWPSTRUCT*)lParam;
+	if (cwps->message = WM_NCPAINT) {
+		if (strlen(dataBuffer->titleBar) > 0)
+		{
+//			UpdateTitleBar(FindUOWindow());
+		}
+	}
+
 	if (cwps->message == 0x400)
 	{
 		ProcessWindowMessage(cwps->message, wParam, cwps->lParam);
@@ -418,7 +281,7 @@ LRESULT CALLBACK CallWndHook(int code,WPARAM wParam,LPARAM lParam)
 LRESULT CALLBACK GetMessageHook(int code,WPARAM wParam,LPARAM lParam)
 {
 	MSG *msg = (MSG*)lParam;
-	if (msg->message == 0x400 || msg->message == 0x401)
+	if (msg->message == 0x400 || msg->message == 0x401 || msg->message == 0x402)
 	{
 		ProcessWindowMessage(msg->message, msg->wParam, msg->lParam);
 	}
@@ -432,29 +295,31 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	}
 	return DefWindowProcA(hwnd, uMsg, wParam, lParam);
 }
+#pragma endregion
 
-void LoginCryptPatch(char *buffer, HANDLE hProcess, long baseAddress)
+#pragma region Encryption Removal
+VOID LoginCryptPatch(PUCHAR buffer, HANDLE hProcess, long baseAddress)
 {
-	char newClientSig[] = { 0x75, 0x12, 0x8B, 0x54, 0x24, 0x0C };
+	unsigned char newClientSig[] = { 0x75, 0x12, 0x8B, 0x54, 0x24, 0x0C };
 	int offset = 0;
 	SIZE_T written = 0;
 
 	if (FindSignatureOffset(newClientSig, 6, buffer, 4194304, &offset))
 	{
-		char patch[] = { 0xEB };
+		unsigned char patch[] = { 0xEB };
 		WriteProcessMemory(hProcess, (LPVOID)(baseAddress+offset), patch, 1, &written);
 	}
 }
 
-void TwoFishCryptPatch(char *buffer, HANDLE hProcess, long baseAddress)
+VOID TwoFishCryptPatch(PUCHAR buffer, HANDLE hProcess, long baseAddress)
 {
-	char oldClientSig[] = { 0x8B, 0xD9, 0x8B, 0xC8, 0x48, 0x85, 0xC9, 0x0F, 0x84 };
-	char newClientSig[] = { 0x74, 0x0F, 0x83, 0xB9, 0xB4, 0x00, 0x00, 0x00, 0x00 };
+	unsigned char oldClientSig[] = { 0x8B, 0xD9, 0x8B, 0xC8, 0x48, 0x85, 0xC9, 0x0F, 0x84 };
+	unsigned char newClientSig[] = { 0x74, 0x0F, 0x83, 0xB9, 0xB4, 0x00, 0x00, 0x00, 0x00 };
 	int offset;
 
 	if (FindSignatureOffset(oldClientSig, 9, buffer, 4194304, &offset))
 	{
-		char patch[] = { 0x85 };
+		unsigned char patch[] = { 0x85 };
 		SIZE_T written = 0;
 		WriteProcessMemory(hProcess, (LPVOID)(baseAddress+offset), patch, 1, &written);
 		return;
@@ -462,22 +327,22 @@ void TwoFishCryptPatch(char *buffer, HANDLE hProcess, long baseAddress)
 
 	if (FindSignatureOffset(newClientSig, 9, buffer, 4194304, &offset))
 	{
-		char patch[] = { 0xEB };
+		unsigned char patch[] = { 0xEB };
 		SIZE_T written = 0;
 		WriteProcessMemory(hProcess, (LPVOID)(baseAddress+offset), patch, 1, &written);
 		return;
 	}
 }
 
-void DecryptPatch(char *buffer, HANDLE hProcess, long baseAddress)
+VOID DecryptPatch(PUCHAR buffer, HANDLE hProcess, long baseAddress)
 {
-	char oldClientSig[] = { 0x8B, 0x86, 0x04, 0x01, 0x0A, 0x00, 0x85, 0xC0, 0x74, 0x52 };
-	char newClientSig[] = { 0x74, 0x37, 0x83, 0xBE, 0xB4, 0x00, 0x00, 0x00, 0x00 };
+	unsigned char oldClientSig[] = { 0x8B, 0x86, 0x04, 0x01, 0x0A, 0x00, 0x85, 0xC0, 0x74, 0x52 };
+	unsigned char newClientSig[] = { 0x74, 0x37, 0x83, 0xBE, 0xB4, 0x00, 0x00, 0x00, 0x00 };
 	int offset;
 
 	if (FindSignatureOffset(oldClientSig, 10, buffer, 4194304, &offset))
 	{
-		char patch[] = { 0x3B };
+		unsigned char patch[] = { 0x3B };
 		SIZE_T written = 0;
 		WriteProcessMemory(hProcess, (LPVOID)(baseAddress+offset), patch, 1, &written);
 		return;
@@ -485,7 +350,7 @@ void DecryptPatch(char *buffer, HANDLE hProcess, long baseAddress)
 
 	if (FindSignatureOffset(newClientSig, 9, buffer, 4194304, &offset))
 	{
-		char patch[] = { 0xEB };
+		unsigned char patch[] = { 0xEB };
 		SIZE_T written = 0;
 		WriteProcessMemory(hProcess, (LPVOID)(baseAddress+offset), patch, 1, &written);
 		return;
@@ -493,11 +358,11 @@ void DecryptPatch(char *buffer, HANDLE hProcess, long baseAddress)
 
 }
 
-void PatchEncryption(int pid)
+VOID PatchEncryption(int pid)
 {
 	HANDLE proc = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
-	long baseAddress = 0x0400000;
-	char *buffer = (char*)malloc(4194304);
+	LONG baseAddress = 0x0400000;
+	PUCHAR buffer = new UCHAR[4194304];
 	SIZE_T read = 0;
 	ReadProcessMemory(proc, (LPCVOID)baseAddress, buffer, 4194304, &read);
 
@@ -505,10 +370,11 @@ void PatchEncryption(int pid)
 	TwoFishCryptPatch(buffer, proc, baseAddress);
 	DecryptPatch(buffer, proc, baseAddress);
 
-	free(buffer);
+	delete[] buffer;
 	CloseHandle(proc);
 
 }
+#pragma endregion Encryption Removal
 
 extern "C" INIT_ERROR __declspec(dllexport) InstallLibrary(HWND razorhwnd, int clientprocid, int flags) 
 {
@@ -575,7 +441,7 @@ extern "C" LPVOID __declspec(dllexport) GetSharedAddress()
 	return dataBuffer;
 }
 
-extern "C" void __declspec(dllexport) SetServer(UINT serverIp, USHORT serverPort) 
+extern "C" VOID __declspec(dllexport) SetServer(UINT serverIp, USHORT serverPort) 
 {
 	if (dataBuffer != NULL)
 	{
@@ -589,22 +455,22 @@ extern "C" HANDLE __declspec(dllexport) GetCommMutex()
 	return mutex;
 }
 
-extern "C" void __declspec(dllexport) SetDataPath(char *path) 
+extern "C" VOID __declspec(dllexport) SetDataPath(char *dataPath) 
 {
 	if (dataBuffer != NULL)
 	{
 		WaitForSingleObject(mutex, -1);
-		strncpy_s(dataBuffer->clientDataPath, 256, path, 256);
+		strncpy_s(dataBuffer->clientDataPath, MAX_PATH, dataPath, 256);
 		ReleaseMutex(mutex);
 	}
 }
 
-extern "C" void __declspec(dllexport) SetAllowDisconn(BOOL allow)
+extern "C" VOID __declspec(dllexport) SetAllowDisconn(BOOL allowDisconn)
 {
 	if (dataBuffer != NULL && mutex != NULL) 
 	{
 		WaitForSingleObject(mutex, -1);
-		dataBuffer->allowDisconn = allow;
+		dataBuffer->allowDisconn = allowDisconn;
 		ReleaseMutex(mutex);
 	}
 }
@@ -614,7 +480,7 @@ extern "C" BOOL __declspec(dllexport) AllowBit(UINT bit)
 	return TRUE;
 }
 
-extern "C" void __declspec(dllexport) BringToFront(HWND hwnd)
+extern "C" VOID __declspec(dllexport) BringToFront(HWND hwnd)
 {
 	SetWindowPos(hwnd, 0, 0, 0, 0, 0, 3);
 	ShowWindow(hwnd, 5);
@@ -622,13 +488,13 @@ extern "C" void __declspec(dllexport) BringToFront(HWND hwnd)
 	SetFocus(hwnd);
 }
 
-extern "C" int __declspec(dllexport) HandleNegotiate(unsigned long features)
+extern "C" int __declspec(dllexport) HandleNegotiate(ULONG features)
 {
 	dataBuffer->features = features;
 	return 1;
 }
 
-extern "C" int __declspec(dllexport) InitializeLibrary(char *version)
+extern "C" int __declspec(dllexport) InitializeLibrary(LPCSTR version)
 {
 	//	AllocConsole();
 	//	consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -636,7 +502,7 @@ extern "C" int __declspec(dllexport) InitializeLibrary(char *version)
 	return 1;
 }
 
-extern "C" void __declspec(dllexport) Shutdown(BOOL closeClient)
+extern "C" VOID __declspec(dllexport) Shutdown(BOOL closeClient)
 {
 	if (IsWindow(uoAssistHwnd))
 	{
@@ -650,52 +516,53 @@ extern "C" void __declspec(dllexport) Shutdown(BOOL closeClient)
 	}
 }
 
-extern "C" int __declspec(dllexport) TotalIn()
+extern "C" DWORD __declspec(dllexport) TotalIn()
 {
 	return dataBuffer->totalIn;
 }
 
-extern "C" int __declspec(dllexport) TotalOut()
+extern "C" DWORD __declspec(dllexport) TotalOut()
 {
 	return dataBuffer->totalOut;
 }
 
 #pragma region Translate Functions, untested
-extern "C" void __declspec(dllexport) TranslateSetup(TRANSLATESETUP *ptr)
+extern "C" VOID __declspec(dllexport) TranslateSetup(TRANSLATESETUP *ptr)
 {
 	if (ptr != NULL)
 		(*ptr)();
 }
 
-extern "C" void __declspec(dllexport) TranslateLogin(TRANSLATELOGIN *ptr, char *name, char *shard)
+extern "C" VOID __declspec(dllexport) TranslateLogin(TRANSLATELOGIN *ptr, char *name, char *shard)
 {
 	if (ptr != NULL)
 		(*ptr)(name, shard);
 }
 
-extern "C" void __declspec(dllexport) TranslateDo(TRANSLATEDO *ptr, char *intext, char *outtext, int *len)
+extern "C" VOID __declspec(dllexport) TranslateDo(TRANSLATEDO *ptr, char *intext, char *outtext, int *len)
 {
 	if (ptr != NULL)
 		(*ptr)(intext, outtext, len);
 }
 #pragma endregion
 
-extern "C" void __declspec(dllexport) SetDeathMsg(char *msg)
+extern "C" VOID __declspec(dllexport) SetDeathMsg(LPCSTR msg)
 {
 	WaitForSingleObject(mutex, -1);
-	strcpy(dataBuffer->deathMsg, msg);
+	strcpy_s(dataBuffer->deathMsg, 16, msg);
 	ReleaseMutex(mutex);
 }
 
-extern "C" void __declspec(dllexport) CalibratePosition(int x, int y, int z)
+extern "C" VOID __declspec(dllexport) CalibratePosition(int x, int y, int z)
 {
+	LogPrintfR("CalibratePosition: X: %d Y: %d Z: %d\r\n", x, y, z);
 	dataBuffer->X = x;
 	dataBuffer->Y = y;
 	dataBuffer->Z = z;
 	PostMessageA(clienthWnd, 0x401, 0x10, 0x00);
 }
 
-extern "C" void __declspec(dllexport) GetPosition(int *x, int *y, int *z)
+extern "C" VOID __declspec(dllexport) GetPosition(int *x, int *y, int *z)
 {
 	//TODO: read it from the client if NULL??
 
@@ -708,15 +575,18 @@ extern "C" void __declspec(dllexport) GetPosition(int *x, int *y, int *z)
 	if (z != NULL)
 		*z = dataBuffer->Z;
 
+	LogPrintfR("GetPosition(): X: %d, Y: %d, Z: %d\r\n", dataBuffer->X, dataBuffer->Y, dataBuffer->Z);
 }
 
 extern "C" int __declspec(dllexport) GetUOProcId()
 {
+//	LogPrintfR("GetUOProcId()\r\n");
 	return clientProcessId;
 }
 
 extern "C" __declspec(dllexport) char* GetUOVersion()
 {
+//	LogPrintfR("GetUOVersion()\r\n");
 	char ver[] = "7.0.34.23";
 	//return dataBuffer->clientVersion;
 	return ver;
@@ -724,29 +594,33 @@ extern "C" __declspec(dllexport) char* GetUOVersion()
 
 extern "C" __declspec(dllexport) BOOL IsCalibrated()
 {
-	if (dataBuffer->X > -1)
-		return true;
+	BOOL ret = false;
+	if (dataBuffer->X > 0 && dataBuffer->Y > 0)
+		ret = true;
 	//TODO: check y and z
-	return false;
+	//LogPrintfR("IsCalibrated(): %d, X: %d, Y: %d, Z: %d\r\n", ret, dataBuffer->X, dataBuffer->Y, dataBuffer->Z);
+	return ret;
 }
 
 #pragma region TODO: CaptureScreen, DoFeatures
 extern "C" int __declspec(dllexport) CaptureScreen(BOOL isFullScreen, char* message)
 {
+	LogPrintfR("CaptureScreen()\r\n");
 	//TODO
 	return NULL;
 }
 
-extern "C" void __declspec(dllexport) DoFeatures(int features)
+extern "C" VOID __declspec(dllexport) DoFeatures(DWORD features)
 {
+	LogPrintfR("DoFeatures()\r\n");
 	//TODO
 }
 #pragma endregion
 
-extern "C" int __declspec(dllexport) GetPacketLength(char *buffer, int bufferlength)
+extern "C" DWORD __declspec(dllexport) GetPacketLength(PUCHAR buffer, int bufferlength)
 {
-	short len = dataBuffer->packetTable[(unsigned char)buffer[0]];
-	if (len == (short)0x8000)
+	SHORT len = dataBuffer->packetTable[(unsigned char)buffer[0]];
+	if (len == (SHORT)0x8000)
 		len = (((BYTE)buffer[1] << 8) | ((BYTE)buffer[2]));
 
 	//LogPrintf("Packet Id %x, len = %x\r\n", buffer[0], len);
@@ -760,13 +634,4 @@ extern "C" BOOL __declspec(dllexport) IsDynLength(char packetid)
 	if (len == (short)0x8000)
 		return true;
 	return false;
-}
-
-void InstallApiHooks()
-{
-	HookFunc("wsock32.dll", "connect", &newConnect, (FARPROC*)&oldConnect);
-	HookFunc("wsock32.dll", "recv", &newRecv, (FARPROC*)&oldRecv);
-	HookFunc("wsock32.dll", "send", &newSend, (FARPROC*)&oldSend);
-	HookFunc("wsock32.dll", "closesocket", &newClosesocket, (FARPROC*)&oldClosesocket);
-	HookFunc("wsock32.dll", "select", &newSelect, (FARPROC*)&oldSelect);
 }

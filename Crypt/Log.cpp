@@ -7,6 +7,21 @@ extern "C" void __declspec(dllexport) Log(char*data)
 	WriteConsoleA(consoleHandle, data, strlen(data), NULL, NULL);
 }
 
+void LogPrintfR(char *fmt, ...)
+{
+	char buf[16384];
+	va_list args;
+	va_start(args, fmt);
+	vsprintf(buf, fmt, args);
+	va_end(args);
+	WaitForSingleObject(mutex, -1);
+	PUCHAR ptr = (dataBuffer->logMessage.Buff0+(dataBuffer->logMessage.Start + dataBuffer->logMessage.Length));
+	strcpy((PCHAR)ptr, buf);
+	dataBuffer->logMessage.Length += strlen(buf);
+	ReleaseMutex(mutex);
+	PostMessage(FindUOWindow(), 0x401, UONET_LOGMESSAGE, 0);
+}
+
 void LogPrintf(char *fmt, ...) 
 {
 	char buf[16384];

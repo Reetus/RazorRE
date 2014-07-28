@@ -93,8 +93,10 @@
     <ClInclude Include="Hooks.h" />
     <ClInclude Include="Log.h" />
     <ClInclude Include="Memory.h" />
+    <ClInclude Include="Misc.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="UOArt.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Compression.cpp" />
@@ -110,10 +112,12 @@
     <ClCompile Include="Hooks.cpp" />
     <ClCompile Include="Log.cpp" />
     <ClCompile Include="Memory.cpp" />
+    <ClCompile Include="Misc.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="UOArt.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

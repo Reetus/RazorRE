@@ -1,17 +1,14 @@
 #pragma once
 #pragma pack(1)
-#include <stdio.h>
-#include "Hooks.h"
-#include "Memory.h"
-#include "Log.h"
+#include "stdafx.h"
 
-#define SHARED_BUFF_SIZE = 524288;
+#define SHARED_BUFF_SIZE 524288
 
 struct Buffer 
 {
-	int Length;
-	int Start;
-	char Buff0[524288];
+	DWORD Length;
+	DWORD Start;
+	UCHAR Buff0[SHARED_BUFF_SIZE];
 };
 
 struct ClientPacketInfo
@@ -27,22 +24,23 @@ struct DataBuffer
 	struct Buffer outRecv; //1048592 0x100010 
 	struct Buffer inSend; //1572888 0x180018
 	struct Buffer outSend; //2097184 0x200020
-	char titleBar[128];
+	CHAR titleBar[512];
 	BOOL allowDisconn;
-	char clientDataPath[256];
-	int serverIp;
-	u_short serverPort;
-	char clientVersion[128];
-	int X;
-	int Y;
-	int Z;
-	unsigned long features;
-	char deathMsg[16];
-	int totalIn;
-	int totalOut;
-	int gameSizeX;
-	int gameSizeY;
-	short packetTable[0x100];
+	CHAR clientDataPath[MAX_PATH];
+	DWORD serverIp;
+	USHORT serverPort;
+	CHAR clientVersion[128];
+	DWORD X;
+	DWORD Y;
+	DWORD Z;
+	ULONG features;
+	CHAR deathMsg[16];
+	DWORD totalIn;
+	DWORD totalOut;
+	DWORD gameSizeX;
+	DWORD gameSizeY;
+	SHORT packetTable[0x100];
+	struct Buffer logMessage;
 };
 
 enum UONetMessage
@@ -68,8 +66,8 @@ enum UONetMessage
 	SmartCPU = 21,
 	Negotiate = 22,
 	SetMapHWnd = 23,
+	UONET_LOGMESSAGE = 24
 };
-
 
 enum INIT_ERROR 
 {
@@ -85,27 +83,37 @@ enum INIT_ERROR
 	UNKNOWN
 };
 
-HMODULE thishModule;
-
-extern "C" void __declspec(dllexport) WaitForWindow(DWORD hProcess);
+// DLL Exports
+extern "C" VOID __declspec(dllexport) WaitForWindow(DWORD hProcess);
 extern "C" INIT_ERROR __declspec(dllexport) InstallLibrary(HWND razorhwnd, int clientprocid, int flags);
-extern "C" int __declspec(dllexport) GetPacketLength(char *buffer, int bufferlength);
-extern "C" int __declspec(dllexport) GetClientPacketLength(char *buffer, int bufferlength);
-extern "C" void __declspec(dllexport) SetServer(UINT serverIp, USHORT serverPort) ;
-void InstallApiHooks();
-void CreateCommunicationMutex();
+extern "C" DWORD __declspec(dllexport) GetPacketLength(PUCHAR buffer, int bufferlength);
+extern "C" DWORD __declspec(dllexport) GetClientPacketLength(char *buffer, int bufferlength);
+extern "C" VOID __declspec(dllexport) SetServer(UINT serverIp, USHORT serverPort) ;
+extern "C" HWND __declspec(dllexport) FindUOWindow();
+
+// Misc Functions
+VOID InstallApiHooks();
+VOID CreateCommunicationMutex();
+BOOL GetPacketTable();
+VOID SendOutgoingBuffer();
 LRESULT CALLBACK CallWndHook(int code,WPARAM wParam,LPARAM lParam);
 LRESULT CALLBACK GetMessageHook(int code,WPARAM wParam,LPARAM lParam);
+VOID UpdateTitleBar(HWND hwnd);
 
-int WINAPI newRecv(SOCKET s, char *buf, int len, int flags);
-BOOL WINAPI ourRecv(SOCKET s, char *buf, int len, int flags);
+// Globals
+extern HWND clienthWnd;
+extern HWND razorhWnd;
+extern DWORD clientProcessId;
+extern HANDLE mutex;
+extern HANDLE fileMapping;
+extern HANDLE consoleHandle;
+extern BOOL mustDecompress;
+extern BOOL mustCompress;
+extern SOCKET serverSocket;
+extern struct DataBuffer *dataBuffer;
+extern struct uo_decompression decompress;
 
-SEND oldSend;
-SELECT oldSelect;
-CLOSESOCKET oldClosesocket;
-CONNECT oldConnect;
-RECV oldRecv;
-
+// Typedefs
 typedef int (WINAPI *TRANSLATESETUP)();
 typedef int (WINAPI *TRANSLATELOGIN)(char*, char*);
 typedef int (WINAPI *TRANSLATEDO)(char*, char*, int*);

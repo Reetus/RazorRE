@@ -17,4 +17,10 @@
 #include <stdlib.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <map>
 
+#include "Compression.h"
+#include "Crypt.h"
+#include "Hooks.h"
+#include "Log.h"
+#include "Memory.h"
