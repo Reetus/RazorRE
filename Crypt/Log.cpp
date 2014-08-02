@@ -2,7 +2,7 @@
 
 extern HANDLE consoleHandle;
 
-extern "C" void __declspec(dllexport) Log(char*data)
+void DLLEXPORT Log(char*data)
 {
 	WriteConsoleA(consoleHandle, data, strlen(data), NULL, NULL);
 }
@@ -32,7 +32,7 @@ void LogPrintf(char *fmt, ...)
 	Log(buf);
 }
 
-extern "C" void __declspec(dllexport) LogPacket(char *msg, char *packet, int packetlen)
+void __declspec(dllexport) LogPacket(char *msg, char *packet, int packetlen)
 {
 	char buffer[256];
 	memset(buffer, 0, 256);

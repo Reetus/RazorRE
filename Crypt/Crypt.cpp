@@ -64,7 +64,7 @@ int version_sprintf(char *buffer, const char *fmt, char *val)
 	return sprintf(buffer, fmt, val);
 }
 
-extern "C" VOID __declspec(dllexport) __cdecl OnAttach() {
+VOID DLLEXPORT OnAttach() {
 	AllocConsole();
 	consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 	clientProcessId = GetCurrentProcessId();
@@ -161,7 +161,7 @@ BOOL GetPacketTable()
 	return false;
 }
 
-extern "C" HWND __declspec(dllexport) FindUOWindow() 
+HWND DLLEXPORT FindUOWindow() 
 {
 	if (IsWindow(clienthWnd))
 	{
@@ -170,7 +170,7 @@ extern "C" HWND __declspec(dllexport) FindUOWindow()
 	return FindWindowA("Ultima Online", 0);
 }
 
-extern "C" VOID __declspec(dllexport) WaitForWindow(DWORD dwProcessId) 
+VOID DLLEXPORT WaitForWindow(DWORD dwProcessId) 
 {
 	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, NULL, dwProcessId);
 	do {
@@ -376,7 +376,7 @@ VOID PatchEncryption(int pid)
 }
 #pragma endregion Encryption Removal
 
-extern "C" INIT_ERROR __declspec(dllexport) InstallLibrary(HWND razorhwnd, int clientprocid, int flags) 
+INIT_ERROR DLLEXPORT InstallLibrary(HWND razorhwnd, int clientprocid, int flags) 
 {
 	razorhWnd = razorhwnd;
 	clientProcessId = clientprocid;
@@ -436,12 +436,12 @@ extern "C" INIT_ERROR __declspec(dllexport) InstallLibrary(HWND razorhwnd, int c
 	return SUCCESS;
 }
 
-extern "C" LPVOID __declspec(dllexport) GetSharedAddress() 
+LPVOID DLLEXPORT GetSharedAddress() 
 {
 	return dataBuffer;
 }
 
-extern "C" VOID __declspec(dllexport) SetServer(UINT serverIp, USHORT serverPort) 
+VOID DLLEXPORT SetServer(UINT serverIp, USHORT serverPort) 
 {
 	if (dataBuffer != NULL)
 	{
@@ -450,12 +450,12 @@ extern "C" VOID __declspec(dllexport) SetServer(UINT serverIp, USHORT serverPort
 	}
 }
 
-extern "C" HANDLE __declspec(dllexport) GetCommMutex()
+HANDLE DLLEXPORT GetCommMutex()
 {
 	return mutex;
 }
 
-extern "C" VOID __declspec(dllexport) SetDataPath(char *dataPath) 
+VOID DLLEXPORT SetDataPath(char *dataPath) 
 {
 	if (dataBuffer != NULL)
 	{
@@ -465,7 +465,7 @@ extern "C" VOID __declspec(dllexport) SetDataPath(char *dataPath)
 	}
 }
 
-extern "C" VOID __declspec(dllexport) SetAllowDisconn(BOOL allowDisconn)
+VOID DLLEXPORT SetAllowDisconn(BOOL allowDisconn)
 {
 	if (dataBuffer != NULL && mutex != NULL) 
 	{
@@ -475,12 +475,12 @@ extern "C" VOID __declspec(dllexport) SetAllowDisconn(BOOL allowDisconn)
 	}
 }
 
-extern "C" BOOL __declspec(dllexport) AllowBit(UINT bit)
+BOOL DLLEXPORT AllowBit(UINT bit)
 {
 	return TRUE;
 }
 
-extern "C" VOID __declspec(dllexport) BringToFront(HWND hwnd)
+VOID DLLEXPORT BringToFront(HWND hwnd)
 {
 	SetWindowPos(hwnd, 0, 0, 0, 0, 0, 3);
 	ShowWindow(hwnd, 5);
@@ -488,13 +488,13 @@ extern "C" VOID __declspec(dllexport) BringToFront(HWND hwnd)
 	SetFocus(hwnd);
 }
 
-extern "C" int __declspec(dllexport) HandleNegotiate(ULONG features)
+int DLLEXPORT HandleNegotiate(ULONG features)
 {
 	dataBuffer->features = features;
 	return 1;
 }
 
-extern "C" int __declspec(dllexport) InitializeLibrary(LPCSTR version)
+int DLLEXPORT InitializeLibrary(LPCSTR version)
 {
 	//	AllocConsole();
 	//	consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -502,7 +502,7 @@ extern "C" int __declspec(dllexport) InitializeLibrary(LPCSTR version)
 	return 1;
 }
 
-extern "C" VOID __declspec(dllexport) Shutdown(BOOL closeClient)
+VOID DLLEXPORT Shutdown(BOOL closeClient)
 {
 	if (IsWindow(uoAssistHwnd))
 	{
@@ -516,44 +516,44 @@ extern "C" VOID __declspec(dllexport) Shutdown(BOOL closeClient)
 	}
 }
 
-extern "C" DWORD __declspec(dllexport) TotalIn()
+DWORD DLLEXPORT TotalIn()
 {
 	return dataBuffer->totalIn;
 }
 
-extern "C" DWORD __declspec(dllexport) TotalOut()
+DWORD DLLEXPORT TotalOut()
 {
 	return dataBuffer->totalOut;
 }
 
 #pragma region Translate Functions, untested
-extern "C" VOID __declspec(dllexport) TranslateSetup(TRANSLATESETUP *ptr)
+VOID DLLEXPORT TranslateSetup(TRANSLATESETUP *ptr)
 {
 	if (ptr != NULL)
 		(*ptr)();
 }
 
-extern "C" VOID __declspec(dllexport) TranslateLogin(TRANSLATELOGIN *ptr, char *name, char *shard)
+VOID DLLEXPORT TranslateLogin(TRANSLATELOGIN *ptr, char *name, char *shard)
 {
 	if (ptr != NULL)
 		(*ptr)(name, shard);
 }
 
-extern "C" VOID __declspec(dllexport) TranslateDo(TRANSLATEDO *ptr, char *intext, char *outtext, int *len)
+VOID DLLEXPORT TranslateDo(TRANSLATEDO *ptr, char *intext, char *outtext, int *len)
 {
 	if (ptr != NULL)
 		(*ptr)(intext, outtext, len);
 }
 #pragma endregion
 
-extern "C" VOID __declspec(dllexport) SetDeathMsg(LPCSTR msg)
+VOID DLLEXPORT SetDeathMsg(LPCSTR msg)
 {
 	WaitForSingleObject(mutex, -1);
 	strcpy_s(dataBuffer->deathMsg, 16, msg);
 	ReleaseMutex(mutex);
 }
 
-extern "C" VOID __declspec(dllexport) CalibratePosition(int x, int y, int z)
+VOID DLLEXPORT CalibratePosition(int x, int y, int z)
 {
 	LogPrintfR("CalibratePosition: X: %d Y: %d Z: %d\r\n", x, y, z);
 	dataBuffer->X = x;
@@ -562,7 +562,7 @@ extern "C" VOID __declspec(dllexport) CalibratePosition(int x, int y, int z)
 	PostMessageA(clienthWnd, 0x401, 0x10, 0x00);
 }
 
-extern "C" VOID __declspec(dllexport) GetPosition(int *x, int *y, int *z)
+VOID DLLEXPORT GetPosition(int *x, int *y, int *z)
 {
 	//TODO: read it from the client if NULL??
 
@@ -578,13 +578,13 @@ extern "C" VOID __declspec(dllexport) GetPosition(int *x, int *y, int *z)
 	LogPrintfR("GetPosition(): X: %d, Y: %d, Z: %d\r\n", dataBuffer->X, dataBuffer->Y, dataBuffer->Z);
 }
 
-extern "C" int __declspec(dllexport) GetUOProcId()
+int DLLEXPORT GetUOProcId()
 {
 //	LogPrintfR("GetUOProcId()\r\n");
 	return clientProcessId;
 }
 
-extern "C" __declspec(dllexport) char* GetUOVersion()
+DLLEXPORT char* GetUOVersion()
 {
 //	LogPrintfR("GetUOVersion()\r\n");
 	char ver[] = "7.0.34.23";
@@ -592,7 +592,7 @@ extern "C" __declspec(dllexport) char* GetUOVersion()
 	return ver;
 }
 
-extern "C" __declspec(dllexport) BOOL IsCalibrated()
+DLLEXPORT BOOL IsCalibrated()
 {
 	BOOL ret = false;
 	if (dataBuffer->X > 0 && dataBuffer->Y > 0)
@@ -602,22 +602,15 @@ extern "C" __declspec(dllexport) BOOL IsCalibrated()
 	return ret;
 }
 
-#pragma region TODO: CaptureScreen, DoFeatures
-extern "C" int __declspec(dllexport) CaptureScreen(BOOL isFullScreen, char* message)
-{
-	LogPrintfR("CaptureScreen()\r\n");
-	//TODO
-	return NULL;
-}
-
-extern "C" VOID __declspec(dllexport) DoFeatures(DWORD features)
+#pragma region TODO: DoFeatures
+VOID DLLEXPORT DoFeatures(DWORD features)
 {
 	LogPrintfR("DoFeatures()\r\n");
 	//TODO
 }
 #pragma endregion
 
-extern "C" DWORD __declspec(dllexport) GetPacketLength(PUCHAR buffer, int bufferlength)
+DWORD DLLEXPORT GetPacketLength(PUCHAR buffer, int bufferlength)
 {
 	SHORT len = dataBuffer->packetTable[(unsigned char)buffer[0]];
 	if (len == (SHORT)0x8000)
@@ -628,7 +621,7 @@ extern "C" DWORD __declspec(dllexport) GetPacketLength(PUCHAR buffer, int buffer
 	return len;
 }
 
-extern "C" BOOL __declspec(dllexport) IsDynLength(char packetid)
+BOOL DLLEXPORT IsDynLength(char packetid)
 {
 	short len = dataBuffer->packetTable[(unsigned char)packetid];
 	if (len == (short)0x8000)

@@ -1,0 +1,3 @@
+LIBRARY Loader
+EXPORTS
+	Load

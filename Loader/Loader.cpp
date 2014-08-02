@@ -16,7 +16,7 @@ enum LOADER_ERROR {
 	UNKNOWN_ERROR = 99
 };
 
-extern "C" LOADER_ERROR __declspec(dllexport) __cdecl Load(char *client, char *dll, char *dllfunc, void *dlldata, int dlldatalen, int *pid) {
+LOADER_ERROR __declspec(dllexport) __cdecl Load(char *client, char *dll, char *dllfunc, void *dlldata, int dlldatalen, int *pid) {
 	char shortPath[MAX_PATH];
 	char pathOnly[MAX_PATH];
 	void *dllDataAlloc;

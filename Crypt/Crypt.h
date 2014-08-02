@@ -3,6 +3,7 @@
 #include "stdafx.h"
 
 #define SHARED_BUFF_SIZE 524288
+#define DLLEXPORT __declspec(dllexport)
 
 struct Buffer 
 {
@@ -84,12 +85,12 @@ enum INIT_ERROR
 };
 
 // DLL Exports
-extern "C" VOID __declspec(dllexport) WaitForWindow(DWORD hProcess);
-extern "C" INIT_ERROR __declspec(dllexport) InstallLibrary(HWND razorhwnd, int clientprocid, int flags);
-extern "C" DWORD __declspec(dllexport) GetPacketLength(PUCHAR buffer, int bufferlength);
-extern "C" DWORD __declspec(dllexport) GetClientPacketLength(char *buffer, int bufferlength);
-extern "C" VOID __declspec(dllexport) SetServer(UINT serverIp, USHORT serverPort) ;
-extern "C" HWND __declspec(dllexport) FindUOWindow();
+VOID DLLEXPORT WaitForWindow(DWORD hProcess);
+INIT_ERROR DLLEXPORT InstallLibrary(HWND razorhwnd, int clientprocid, int flags);
+DWORD DLLEXPORT GetPacketLength(PUCHAR buffer, int bufferlength);
+DWORD DLLEXPORT GetClientPacketLength(char *buffer, int bufferlength);
+VOID DLLEXPORT SetServer(UINT serverIp, USHORT serverPort) ;
+HWND DLLEXPORT FindUOWindow();
 
 // Misc Functions
 VOID InstallApiHooks();
