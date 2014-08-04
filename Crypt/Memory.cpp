@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "Log.h"
 
-BOOL FindSignatureOffset(PUCHAR signature, int siglength, PUCHAR buffer, int buflen, int *offset)
+BOOL FindSignatureOffset(PUCHAR signature, int siglength, PUCHAR buffer, int buflen, DWORD *offset)
 {
 	unsigned char *base = buffer;
 	bool found = false;
@@ -38,7 +38,7 @@ BOOL FindSignatureAddressWildcard(PUCHAR signature, int sigsize, PUCHAR buffer, 
 	return false;
 }
 
-BOOL FindSignatureAddress(PUCHAR signature, PUCHAR buffer, int sigsize, int bufsize, int *address)
+BOOL FindSignatureAddress(PUCHAR signature, PUCHAR buffer, int sigsize, int bufsize, DWORD *address)
 {
 	BOOL found = false;
 

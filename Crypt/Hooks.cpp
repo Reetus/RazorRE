@@ -87,15 +87,8 @@ DWORD WINAPI newRecv(SOCKET s, char *buf, int buflen, int flags)
 		dataBuffer->outRecv.Length -= len;
 		//		LogPacket("Server -> Client", (char*)buffer, comlen);
 
-		// Check if getting close to buffer filling
-		if ((dataBuffer->outRecv.Start + dataBuffer->outRecv.Length + 8192) > SHARED_BUFF_SIZE)
-		{
-			PUCHAR tmpBuffer = new UCHAR[dataBuffer->outRecv.Length];
-			memcpy(tmpBuffer, dataBuffer->outRecv.Buff0+dataBuffer->outRecv.Start, dataBuffer->outRecv.Length);
-			memcpy(dataBuffer->outRecv.Buff0, tmpBuffer, dataBuffer->outRecv.Length);
-			dataBuffer->outRecv.Start = 0;
-			delete[] tmpBuffer;
-		}
+		if ((dataBuffer->outRecv.Start + dataBuffer->outRecv.Length) > (SHARED_BUFF_SIZE/2))
+			BufferReset(&dataBuffer->outRecv);
 
 		ReleaseMutex(mutex);
 	}
@@ -131,15 +124,9 @@ DWORD WINAPI newSelect(int nfds, PFD_SET readfds, PFD_SET writefds, PFD_SET exce
 			dataBuffer->totalIn+=size;
 
 			WaitForSingleObject(mutex, -1);
-			// Check for buffer overflow, rewrite from 0
-			if ((dataBuffer->inRecv.Start + dataBuffer->inRecv.Length + decomSize) > SHARED_BUFF_SIZE)
-			{
-				PUCHAR tmpBuffer = new UCHAR[dataBuffer->inRecv.Length];
-				memcpy(tmpBuffer, dataBuffer->inRecv.Buff0+dataBuffer->inRecv.Start, dataBuffer->inRecv.Length);
-				memcpy(dataBuffer->inRecv.Buff0, tmpBuffer, dataBuffer->inRecv.Length);
-				dataBuffer->inRecv.Start = 0;
-				delete[] tmpBuffer;
-			}
+
+			if ((dataBuffer->inRecv.Start + dataBuffer->inRecv.Length + decomSize) > (SHARED_BUFF_SIZE/2))
+				BufferReset(&dataBuffer->inRecv);
 
 			memcpy((dataBuffer->inRecv.Buff0+(dataBuffer->inRecv.Start + dataBuffer->inRecv.Length)), decomBuffer, decomSize);
 			dataBuffer->inRecv.Length+=decomSize;
@@ -183,6 +170,9 @@ DWORD WINAPI newSend(SOCKET s, const char *buf, int len, int flags)
 
 		memcpy(mybuff, buf, len);
 		mysize = len;
+
+		if (dataBuffer->inSend.Length > (SHARED_BUFF_SIZE/2))
+			BufferReset(&dataBuffer->inSend);
 
 		PUCHAR ptr = (dataBuffer->inSend.Buff0 + (dataBuffer->inSend.Start+dataBuffer->inSend.Length));
 

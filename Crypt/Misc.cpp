@@ -2,6 +2,15 @@
 #include "Misc.h"
 #include "Log.h"
 
+void BufferReset(Buffer *buffer)
+{
+	PUCHAR tmpBuffer = new UCHAR[buffer->Length];
+	memcpy(tmpBuffer, buffer->Buff0+buffer->Start, buffer->Length);
+	memcpy(buffer->Buff0, tmpBuffer, buffer->Length);
+	buffer->Start = 0;
+	delete[] tmpBuffer;
+}
+
 HBITMAP DLLEXPORT CaptureScreen(BOOL isFullScreen, char* message)
 {
 	LogPrintfR("CaptureScreen()\r\n");
@@ -64,7 +73,6 @@ BOOL GetPESectionAddress(char *sectionName, DWORD *sectionAddress, DWORD *sectio
 		if (_stricmp((char*)ish->Name, sectionName) == 0) 
 		{
 			*sectionAddress = ish->VirtualAddress;
-			LogPrintf("%x %x\r\n", *sectionAddress, ish->VirtualAddress);
 			*sectionSize = ish->Misc.VirtualSize;
 			return true;
 		}

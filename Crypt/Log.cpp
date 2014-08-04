@@ -15,6 +15,10 @@ void LogPrintfR(char *fmt, ...)
 	vsprintf(buf, fmt, args);
 	va_end(args);
 	WaitForSingleObject(mutex, -1);
+
+	if (dataBuffer->logMessage.Length > (SHARED_BUFF_SIZE/2))
+		BufferReset(&dataBuffer->logMessage);
+
 	PUCHAR ptr = (dataBuffer->logMessage.Buff0+(dataBuffer->logMessage.Start + dataBuffer->logMessage.Length));
 	strcpy((PCHAR)ptr, buf);
 	dataBuffer->logMessage.Length += strlen(buf);

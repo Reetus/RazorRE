@@ -23,6 +23,8 @@ SOCKET serverSocket;
 struct DataBuffer *dataBuffer;
 HWND uoAssistHwnd;
 RECT titleRect;
+GETUOVERSION RealGetUOVersion = NULL;
+SIZE *SizePtr = NULL;
 
 VOID SendOutgoingBuffer()
 {
@@ -30,6 +32,9 @@ VOID SendOutgoingBuffer()
 
 	if (dataBuffer->outSend.Length > 0) 
 	{
+		if (dataBuffer->outSend.Length > (SHARED_BUFF_SIZE/2))
+			BufferReset(&dataBuffer->outSend);
+
 		PUCHAR outbuff;
 		PUCHAR buff = (dataBuffer->outSend.Buff0+dataBuffer->outSend.Start);
 
@@ -57,13 +62,6 @@ VOID SendOutgoingBuffer()
 	ReleaseMutex(mutex);
 }
 
-int version_sprintf(char *buffer, const char *fmt, char *val)
-{
-	strcpy(dataBuffer->clientVersion, val);
-	Log(dataBuffer->clientVersion);
-	return sprintf(buffer, fmt, val);
-}
-
 VOID DLLEXPORT OnAttach() {
 	AllocConsole();
 	consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -73,55 +71,104 @@ VOID DLLEXPORT OnAttach() {
 
 	unsigned char* thisModule = (unsigned char*)GetModuleHandleA(NULL);
 
-	IMAGE_DOS_HEADER *idh = (IMAGE_DOS_HEADER*)thisModule;
-	IMAGE_NT_HEADERS *inh = (IMAGE_NT_HEADERS*)((BYTE*)thisModule + idh->e_lfanew);
-	IMAGE_SECTION_HEADER *ish = (IMAGE_SECTION_HEADER*)((BYTE*)thisModule + idh->e_lfanew + sizeof(IMAGE_NT_HEADERS));
-
-	for (int i = 0; i < inh->FileHeader.NumberOfSections;i++)
+	DWORD rdataAddress, rdataSize;
+	if (GetPESectionAddress(".rdata", &rdataAddress, &rdataSize))
 	{
-		if (_stricmp((char*)ish->Name, ".rdata") == 0) 
+		UCHAR uoVer[] = "UO Version %s";
+		PUCHAR ptr= (PUCHAR)thisModule + rdataAddress;
+		DWORD address;
+		if (FindSignatureAddress(uoVer, ptr, strlen((PCHAR)uoVer), rdataSize, &address))
 		{
-			int position = ish->VirtualAddress;
-			int size = ish->Misc.VirtualSize;
-
-			UCHAR uoVer[] = "UO Version %s";
-			PUCHAR ptr = (PUCHAR)thisModule+position;
-			int address;
-			if (FindSignatureAddress(uoVer, ptr, strlen((PCHAR)uoVer), size, &address))
+			DWORD dataAddress, dataSize;
+			if (GetPESectionAddress(".text", &dataAddress, &dataSize)) 
 			{
-				UCHAR findBytes[] = { 0x68, address, (address >> 8), (address >> 16), (address >> 24) };
+				UCHAR findBytes[] = { 0x68, (UCHAR)address, (UCHAR)(address >> 8), (UCHAR)(address >> 16), (UCHAR)(address >> 24) };
+				PUCHAR ptr = (PUCHAR)thisModule + dataAddress;
 
-				ish = (IMAGE_SECTION_HEADER*)((BYTE*)thisModule + idh->e_lfanew + sizeof(IMAGE_NT_HEADERS));
-				ptr = (PUCHAR)thisModule+ish->VirtualAddress;
-
-				if (FindSignatureAddress(findBytes, ptr, 5, ish->Misc.VirtualSize, &address)) 
+				if (FindSignatureAddress(findBytes, ptr, 5, dataSize, &address))
 				{
-					int offset = (address-(int)ptr)+6;
-					ptr = (PUCHAR)ptr+offset;
-
-					if ((unsigned char)*ptr == (unsigned char)0xE8)
+					DWORD offset = (address - (DWORD)thisModule) - 10;
+					PUCHAR ptr = thisModule+offset;
+					if (*ptr == 0xE8) 
 					{
-						int offset = (int)((char*)&version_sprintf-(DWORD)ptr)-5;
-						DWORD oldProtect;
-						VirtualProtect(ptr, 4, PAGE_EXECUTE_READWRITE, &oldProtect);
-						*(ptr++) = 0xE8;
-						*(ptr++) = (char)offset;
-						*(ptr++) = (char)(offset >> 8);
-						*(ptr++) = (char)(offset >> 16);
-						*(ptr++) = (char)(offset >> 24);
-
-						VirtualProtect(ptr, 4, oldProtect, &oldProtect);
+						ptr++;
+						RealGetUOVersion = (GETUOVERSION)(DWORD)((ptr+4) + *(DWORD*)(ptr));
 					}
 				}
 			}
-			break;
 		}
-		ish = (IMAGE_SECTION_HEADER*)((BYTE*)ish + sizeof(IMAGE_SECTION_HEADER));
+	}
+
+	/* Set game window size, copied verbatim from code contributed by Zippy, http://www.runuo.com/community/threads/crypt-dll-reverse-engineering.536176/#post-3987305 */
+	DWORD dataAddress, dataSize;
+	if (GetPESectionAddress(".data", &dataAddress, &dataSize))
+	{
+		UCHAR findBytes[] = { 0x80, 0x02, 0x00, 0x00, 0xE0, 0x01, 0x00, 0x00 };
+		PUCHAR ptr = (PUCHAR)thisModule + dataAddress;
+		DWORD address;
+
+		if (FindSignatureAddress(findBytes, ptr, 8, dataSize, &address))
+		{
+			SizePtr = (SIZE*)address;
+
+			if (GetPESectionAddress(".text", &dataAddress, &dataSize)) 
+			{
+				PUCHAR ptr = (PUCHAR)thisModule + dataAddress;
+				UCHAR findBytes[] = { 0x8B, 0x44, 0x24, 0x04, 0xBA, 0x80, 0x02, 0x00, 0x00, 0x3B, 0xC2, 0xB9, 0xE0, 0x01, 0x00, 0x00 };
+
+				if (FindSignatureAddress(findBytes, ptr, 8, dataSize, &address))
+				{
+					int i;
+					DWORD origAddr = address;
+					DWORD oldProt;
+
+					VirtualProtect( (void*)origAddr, 128, PAGE_EXECUTE_READWRITE, &oldProt );
+					for (i = 16; i < 128; i++)
+					{
+						if ( *((BYTE*)(address+i)) == 0xE9 ) // find the first jmp
+						{
+							memset( (void*)address, 0x90, i ); // nop
+
+							// mov eax, dword [esp+4]
+							*((BYTE*)(address+0)) = 0x8B; // mov
+							*((BYTE*)(address+1)) = 0x44; //  eax
+							*((BYTE*)(address+2)) = 0x24; //  [esp
+							*((BYTE*)(address+3)) = 0x04; //      +4]
+							address += 4;
+
+							*((BYTE*)address) = 0x50; // push eax
+							address++;
+							// call OnSetUOWindowSize
+							*((BYTE*)address) = 0xE8;
+							*((DWORD*)(address+1)) = ((DWORD)OnSetUOWindowSize) - (address + 5);
+							address += 5;
+							break;
+						}
+					}
+					VirtualProtect( (void*)origAddr, 128, oldProt, &oldProt );
+
+				}
+			}
+		}
 	}
 
 	GetPacketTable();
-
 }
+
+/* Set game window size, copied verbatim from code contributed by Zippy, http://www.runuo.com/community/threads/crypt-dll-reverse-engineering.536176/#post-3987305 */
+void __stdcall OnSetUOWindowSize( int width )
+{
+	if ( width != 800 && width != 600 ) // in case it actually the height for some reason
+	{
+		SizePtr->cx = 640;
+		SizePtr->cy = 480;
+	}
+	else
+	{
+		*SizePtr = dataBuffer->gameSize;
+	}
+}
+
 
 /// Get packet size table, lifted from https://github.com/jaryn-kubik/UOInterface/blob/master/UOInterface/PacketHooks.cpp
 BOOL GetPacketTable()
@@ -204,15 +251,21 @@ VOID CreateCommunicationMutex()
 		Log("Mutex failed\r\n");
 	}
 
+	dataBuffer->clientVersion[0] = NULL;
+	dataBuffer->gameSize.cx = 800;
+	dataBuffer->gameSize.cy = 600;
 }
 
 #pragma region Window Message Hooks/Functions
-VOID ProcessWindowMessage(int code, WPARAM wParam, LPARAM lParam) 
+VOID ProcessWindowMessage(int code, WPARAM wParam, LPARAM lParam, MSG *msg) 
 {
 	switch (code) 
 	{
 	case 0x400:
 		razorhWnd = (HWND)lParam;
+		strncpy(dataBuffer->clientVersion, RealGetUOVersion(), 16);
+		LogPrintf("Client version: %s\r\n", dataBuffer->clientVersion);
+
 		break;
 	case 0x401:
 		{
@@ -232,8 +285,8 @@ VOID ProcessWindowMessage(int code, WPARAM wParam, LPARAM lParam)
 					int x = (short)(lParam);
 					int y = (short)(lParam>>16);
 					LogPrintf("SetGameSize: %dx%d\r\n", x, y);
-					dataBuffer->gameSizeX = x;
-					dataBuffer->gameSizeY = y;
+					dataBuffer->gameSize.cx = x;
+					dataBuffer->gameSize.cy = y;
 					break;
 				}
 			case UONET_LOGMESSAGE:
@@ -257,23 +310,25 @@ VOID ProcessWindowMessage(int code, WPARAM wParam, LPARAM lParam)
 			LogPrintf("Title Bar Update: %s\r\n", dataBuffer->titleBar);
 			break;
 		}
+	case WM_KEYDOWN:
+	case WM_SYSKEYDOWN:
+		{
+			if (msg && !SendMessage(razorhWnd, 0x401, UONET_KEYDOWN, wParam))
+				msg->message = msg->lParam = msg->wParam = 0;
+			break;
+		}
+	case WM_MOUSEWHEEL:
+		{
+			PostMessage(razorhWnd, 0x401, UONET_MOUSE, MAKELONG(0, ((short)HIWORD(wParam)) < 0 ? -1 : 1));
+			break;
+		}
 	}
 }
 
 LRESULT CALLBACK CallWndHook(int code,WPARAM wParam,LPARAM lParam)
 {
 	CWPSTRUCT *cwps = (CWPSTRUCT*)lParam;
-	if (cwps->message = WM_NCPAINT) {
-		if (strlen(dataBuffer->titleBar) > 0)
-		{
-//			UpdateTitleBar(FindUOWindow());
-		}
-	}
-
-	if (cwps->message == 0x400)
-	{
-		ProcessWindowMessage(cwps->message, wParam, cwps->lParam);
-	}
+	ProcessWindowMessage(cwps->message, cwps->wParam, cwps->lParam, 0);
 
 	return CallNextHookEx(0, code, wParam, lParam);
 }
@@ -281,10 +336,8 @@ LRESULT CALLBACK CallWndHook(int code,WPARAM wParam,LPARAM lParam)
 LRESULT CALLBACK GetMessageHook(int code,WPARAM wParam,LPARAM lParam)
 {
 	MSG *msg = (MSG*)lParam;
-	if (msg->message == 0x400 || msg->message == 0x401 || msg->message == 0x402)
-	{
-		ProcessWindowMessage(msg->message, msg->wParam, msg->lParam);
-	}
+	ProcessWindowMessage(msg->message, msg->wParam, msg->lParam, msg);
+
 	return CallNextHookEx(0, code, wParam, lParam);
 }
 
@@ -301,7 +354,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 VOID LoginCryptPatch(PUCHAR buffer, HANDLE hProcess, long baseAddress)
 {
 	unsigned char newClientSig[] = { 0x75, 0x12, 0x8B, 0x54, 0x24, 0x0C };
-	int offset = 0;
+	DWORD offset = 0;
 	SIZE_T written = 0;
 
 	if (FindSignatureOffset(newClientSig, 6, buffer, 4194304, &offset))
@@ -315,7 +368,7 @@ VOID TwoFishCryptPatch(PUCHAR buffer, HANDLE hProcess, long baseAddress)
 {
 	unsigned char oldClientSig[] = { 0x8B, 0xD9, 0x8B, 0xC8, 0x48, 0x85, 0xC9, 0x0F, 0x84 };
 	unsigned char newClientSig[] = { 0x74, 0x0F, 0x83, 0xB9, 0xB4, 0x00, 0x00, 0x00, 0x00 };
-	int offset;
+	DWORD offset;
 
 	if (FindSignatureOffset(oldClientSig, 9, buffer, 4194304, &offset))
 	{
@@ -338,7 +391,7 @@ VOID DecryptPatch(PUCHAR buffer, HANDLE hProcess, long baseAddress)
 {
 	unsigned char oldClientSig[] = { 0x8B, 0x86, 0x04, 0x01, 0x0A, 0x00, 0x85, 0xC0, 0x74, 0x52 };
 	unsigned char newClientSig[] = { 0x74, 0x37, 0x83, 0xBE, 0xB4, 0x00, 0x00, 0x00, 0x00 };
-	int offset;
+	DWORD offset;
 
 	if (FindSignatureOffset(oldClientSig, 10, buffer, 4194304, &offset))
 	{
@@ -575,21 +628,24 @@ VOID DLLEXPORT GetPosition(int *x, int *y, int *z)
 	if (z != NULL)
 		*z = dataBuffer->Z;
 
-	LogPrintfR("GetPosition(): X: %d, Y: %d, Z: %d\r\n", dataBuffer->X, dataBuffer->Y, dataBuffer->Z);
+	//LogPrintfR("GetPosition(): X: %d, Y: %d, Z: %d\r\n", dataBuffer->X, dataBuffer->Y, dataBuffer->Z);
 }
 
 int DLLEXPORT GetUOProcId()
 {
-//	LogPrintfR("GetUOProcId()\r\n");
+	//	LogPrintfR("GetUOProcId()\r\n");
 	return clientProcessId;
 }
 
 DLLEXPORT char* GetUOVersion()
 {
-//	LogPrintfR("GetUOVersion()\r\n");
-	char ver[] = "7.0.34.23";
-	//return dataBuffer->clientVersion;
-	return ver;
+	if (dataBuffer)
+	{
+		LogPrintfR("GetUOVersion(): %s\r\n", dataBuffer->clientVersion);
+		return dataBuffer->clientVersion;
+	}
+
+	return "7.0.0.0";
 }
 
 DLLEXPORT BOOL IsCalibrated()

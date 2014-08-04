@@ -38,8 +38,7 @@ struct DataBuffer
 	CHAR deathMsg[16];
 	DWORD totalIn;
 	DWORD totalOut;
-	DWORD gameSizeX;
-	DWORD gameSizeY;
+	SIZE gameSize;
 	SHORT packetTable[0x100];
 	struct Buffer logMessage;
 };
@@ -52,8 +51,8 @@ enum UONetMessage
 	UONET_NOTREADY = 4,
 	UONET_CONNECT = 5,
 	UONET_DISCONNECT = 6,
-	KeyDown = 7,
-	Mouse = 8,
+	UONET_KEYDOWN = 7,
+	UONET_MOUSE = 8,
 	Activate = 9,
 	Focus = 10,
 	Close = 11,
@@ -100,6 +99,7 @@ VOID SendOutgoingBuffer();
 LRESULT CALLBACK CallWndHook(int code,WPARAM wParam,LPARAM lParam);
 LRESULT CALLBACK GetMessageHook(int code,WPARAM wParam,LPARAM lParam);
 VOID UpdateTitleBar(HWND hwnd);
+void __stdcall OnSetUOWindowSize( int width );
 
 // Globals
 extern HWND clienthWnd;
@@ -118,3 +118,4 @@ extern struct uo_decompression decompress;
 typedef int (WINAPI *TRANSLATESETUP)();
 typedef int (WINAPI *TRANSLATELOGIN)(char*, char*);
 typedef int (WINAPI *TRANSLATEDO)(char*, char*, int*);
+typedef PCHAR (CDECL *GETUOVERSION)();

@@ -24,3 +24,4 @@
 #include "Hooks.h"
 #include "Log.h"
 #include "Memory.h"
+#include "Misc.h"
