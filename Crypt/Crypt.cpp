@@ -5,9 +5,10 @@
 #include "Crypt.h"
 #include "Compression.h"
 #include "Misc.h"
+#include <dwmapi.h>
 
 // Globals
-HMODULE thishModule;
+HINSTANCE hInstance;
 HWND clienthWnd;
 HWND razorhWnd;
 DWORD clientProcessId;
@@ -53,6 +54,9 @@ VOID SendOutgoingBuffer()
 		outbuff = new UCHAR[len];//(PUCHAR)malloc(len);
 
 		memcpy(outbuff, buff, len);
+
+		if ((CHAR)outbuff[0] == (CHAR)0xA0)
+			preServerList = true;
 
 		oldSend(serverSocket, (PCHAR)outbuff, len, 0);
 
@@ -146,7 +150,6 @@ VOID DLLEXPORT OnAttach() {
 						}
 					}
 					VirtualProtect( (void*)origAddr, 128, oldProt, &oldProt );
-
 				}
 			}
 		}
@@ -210,11 +213,15 @@ BOOL GetPacketTable()
 
 HWND DLLEXPORT FindUOWindow() 
 {
-	if (IsWindow(clienthWnd))
+	if ( clienthWnd == NULL || !IsWindow( clienthWnd ) )
+	{
+		HWND hWnd = FindWindowA( "Ultima Online", NULL );
+		return hWnd;
+	}
+	else
 	{
 		return clienthWnd;
-	} 
-	return FindWindowA("Ultima Online", 0);
+	}
 }
 
 VOID DLLEXPORT WaitForWindow(DWORD dwProcessId) 
@@ -257,69 +264,105 @@ VOID CreateCommunicationMutex()
 }
 
 #pragma region Window Message Hooks/Functions
-VOID ProcessWindowMessage(int code, WPARAM wParam, LPARAM lParam, MSG *msg) 
+VOID ProcessWindowMessage(HWND hwnd, int code, WPARAM wParam, LPARAM lParam, MSG *msg) 
 {
+	//LogPrintf("ProcessWindowMessage: code = %x, wParam = %d, lParam = %d\r\n", code, wParam, lParam);
 	switch (code) 
 	{
-	case 0x400:
+	case UONET_RAZORINIT:
+
+		clienthWnd = hwnd;
 		razorhWnd = (HWND)lParam;
 		strncpy(dataBuffer->clientVersion, RealGetUOVersion(), 16);
 		LogPrintf("Client version: %s\r\n", dataBuffer->clientVersion);
+		PostMessageA(razorhWnd, UONET_MESSAGE, UONET_READY, 0);
 
 		break;
-	case 0x401:
+
+	case UONET_MESSAGE:
+		switch (LOWORD(wParam)) 
 		{
-			//LogPrintf("ProcessWindowMessage: code = %x, wParam = %d, lParam = %d\r\n", code, wParam, lParam);
-			switch (wParam) 
-			{
-			case UONET_SEND:
-				{
-					WaitForSingleObject(mutex, -1);
-					SendOutgoingBuffer();
-					ReleaseMutex(mutex);
-					break;
-				}
-			case UONET_SETGAMESIZE:
-				{
-					// TODO
-					int x = (short)(lParam);
-					int y = (short)(lParam>>16);
-					LogPrintf("SetGameSize: %dx%d\r\n", x, y);
-					dataBuffer->gameSize.cx = x;
-					dataBuffer->gameSize.cy = y;
-					break;
-				}
-			case UONET_LOGMESSAGE:
-				{
-					WaitForSingleObject(mutex, -1);
-					DWORD length = dataBuffer->logMessage.Length;
-					PCHAR tmpBuffer = new CHAR[length+1];
-					strcpy_s(tmpBuffer, length+1, (PCHAR)(dataBuffer->logMessage.Buff0+dataBuffer->logMessage.Start));
-					Log(tmpBuffer);
-					dataBuffer->logMessage.Start += length;
-					dataBuffer->logMessage.Length -= length;
-					delete[] tmpBuffer;
-					ReleaseMutex(mutex);
-					break;
-				}
-			}
+		case UONET_SEND:
+			WaitForSingleObject(mutex, -1);
+			SendOutgoingBuffer();
+			ReleaseMutex(mutex);
+			break;
+
+		case UONET_SETGAMESIZE:
+			dataBuffer->gameSize.cx = (short)(lParam);
+			dataBuffer->gameSize.cy = (short)(lParam>>16);
+			LogPrintf("SetGameSize: %dx%d\r\n", dataBuffer->gameSize.cx, dataBuffer->gameSize.cy);
+			break;
+
+		case UONET_LOGMESSAGE:
+			WaitForSingleObject(mutex, -1);
+			DWORD length = dataBuffer->logMessage.Length;
+			PCHAR tmpBuffer = new CHAR[length+1];
+			strcpy_s(tmpBuffer, length+1, (PCHAR)(dataBuffer->logMessage.Buff0+dataBuffer->logMessage.Start));
+			Log(tmpBuffer);
+			dataBuffer->logMessage.Start += length;
+			dataBuffer->logMessage.Length -= length;
+			delete[] tmpBuffer;
+			ReleaseMutex(mutex);
 			break;
 		}
-	case 0x402:
-		{
-			LogPrintf("Title Bar Update: %s\r\n", dataBuffer->titleBar);
-			break;
-		}
+		break;
+
 	case WM_KEYDOWN:
 	case WM_SYSKEYDOWN:
-		{
-			if (msg && !SendMessage(razorhWnd, 0x401, UONET_KEYDOWN, wParam))
-				msg->message = msg->lParam = msg->wParam = 0;
-			break;
-		}
+
+		if (msg && !SendMessage(razorhWnd, UONET_MESSAGE, UONET_KEYDOWN, wParam))
+			msg->message = msg->lParam = msg->wParam = 0;
+		break;
+
 	case WM_MOUSEWHEEL:
+
+		PostMessage(razorhWnd, UONET_MESSAGE, UONET_MOUSE, MAKELONG(0, ((short)HIWORD(wParam)) < 0 ? -1 : 1));
+		break;
+
+	case WM_SETFOCUS:
+
+		PostMessage(razorhWnd, UONET_MESSAGE, UONET_FOCUS, true);
+		break;
+
+	case WM_KILLFOCUS:
+
+		PostMessage(razorhWnd, UONET_MESSAGE, UONET_FOCUS, false);
+		break;
+
+	case WM_ACTIVATE:
+
+		PostMessage(razorhWnd, UONET_MESSAGE, UONET_ACTIVATE, wParam);
+		break;
+
+	case UONET_TITLEBAR:
+	case WM_NCPAINT:
+	case WM_NCACTIVATE:
+	case WM_ERASEBKGND:
 		{
-			PostMessage(razorhWnd, 0x401, UONET_MOUSE, MAKELONG(0, ((short)HIWORD(wParam)) < 0 ? -1 : 1));
+			if (strlen(dataBuffer->titleBar) > 0)
+			{
+				DWMNCRENDERINGPOLICY policy = DWMNCRP_ENABLED;
+				DwmSetWindowAttribute(hwnd, DWMWA_NCRENDERING_POLICY, &policy, sizeof(policy));
+				HDC hdc = GetWindowDC(hwnd);
+				HDC hdcMem = CreateCompatibleDC(hdc);
+
+				RECT rect, rect2;
+				GetWindowRect(hwnd, &rect2);
+				RECT r = GetTitlebarRect(hwnd);
+				HBITMAP hBitmap = CreateCompatibleBitmap(hdc, rect2.right, rect2.bottom);
+				SelectObject(hdcMem, hBitmap);
+
+				rect.top = rect.left = 0;
+				rect.right = rect2.right - rect2.left;
+				rect.bottom = (r.bottom - r.top);
+
+				FillRect(hdcMem, &rect, GetSysColorBrush(COLOR_ACTIVECAPTION));
+				DrawTitlebar(hdcMem, hwnd, rect, dataBuffer->titleBar);
+				BitBlt(hdc, r.left, r.top, (r.right - r.left), (r.bottom - r.top), hdcMem, 0, 0, SRCCOPY);
+				DeleteDC(hdcMem);
+				ReleaseDC(hwnd, hdc);
+			}
 			break;
 		}
 	}
@@ -327,16 +370,21 @@ VOID ProcessWindowMessage(int code, WPARAM wParam, LPARAM lParam, MSG *msg)
 
 LRESULT CALLBACK CallWndHook(int code,WPARAM wParam,LPARAM lParam)
 {
-	CWPSTRUCT *cwps = (CWPSTRUCT*)lParam;
-	ProcessWindowMessage(cwps->message, cwps->wParam, cwps->lParam, 0);
-
+	if (code >= 0)
+	{
+		CWPRETSTRUCT *cwps = (CWPRETSTRUCT*)lParam;
+		ProcessWindowMessage(cwps->hwnd, cwps->message, cwps->wParam, cwps->lParam, 0);
+	}
 	return CallNextHookEx(0, code, wParam, lParam);
 }
 
 LRESULT CALLBACK GetMessageHook(int code,WPARAM wParam,LPARAM lParam)
 {
-	MSG *msg = (MSG*)lParam;
-	ProcessWindowMessage(msg->message, msg->wParam, msg->lParam, msg);
+	if (code >= 0 && wParam != PM_NOREMOVE)
+	{
+		MSG *msg = (MSG*)lParam;
+		ProcessWindowMessage(msg->hwnd, msg->message, msg->wParam, msg->lParam, msg);
+	}
 
 	return CallNextHookEx(0, code, wParam, lParam);
 }
@@ -434,37 +482,29 @@ INIT_ERROR DLLEXPORT InstallLibrary(HWND razorhwnd, int clientprocid, int flags)
 	razorhWnd = razorhwnd;
 	clientProcessId = clientprocid;
 
-	HWND hwnd;
 	DWORD procid;
 	DWORD threadId;
-	hwnd = FindWindowA("Ultima Online", 0);
 
-	do 
-	{
-		threadId = GetWindowThreadProcessId(hwnd, &procid);
-		if (procid == clientprocid) {
-			clienthWnd = hwnd;
-			break;
-		}
-		FindWindowExA(0, hwnd, "Ultima Online", 0);
-	} while (hwnd != 0);
+	HWND hWnd = FindUOWindow();
+	if ( hWnd != NULL )
+		threadId = GetWindowThreadProcessId( hWnd, &procid );
 
-	WaitForWindow(clientprocid);
+	clienthWnd = hWnd;
+
+	WaitForWindow(procid);
 
 	CreateCommunicationMutex();
 
 	PatchEncryption(clientprocid);
 
-	HHOOK hhk = SetWindowsHookExA(WH_CALLWNDPROCRET, CallWndHook, thishModule, threadId);
+	HHOOK hhk = SetWindowsHookExA(WH_CALLWNDPROCRET, CallWndHook, hInstance, threadId);
 	if (hhk == NULL) {
-		int error = GetLastError();
-		printf("%d", error);
+		return NO_HOOK;
 	}
 
-	hhk = SetWindowsHookExA(WH_GETMESSAGE, GetMessageHook, thishModule, threadId);
+	hhk = SetWindowsHookExA(WH_GETMESSAGE, GetMessageHook, hInstance, threadId);
 	if (hhk == NULL) {
-		int error = GetLastError();
-		printf("%d", error);
+		return NO_HOOK;
 	}
 
 	WNDCLASSA wndClass;
@@ -477,15 +517,15 @@ INIT_ERROR DLLEXPORT InstallLibrary(HWND razorhwnd, int clientprocid, int flags)
 	wndClass.hbrBackground = 0;
 	wndClass.lpszMenuName = 0;
 	wndClass.lpszClassName = "UOASSIST-TP-MSG-WND";
-	wndClass.hInstance = thishModule;
+	wndClass.hInstance = hInstance;
 	wndClass.lpfnWndProc = WindowProc;
 	ATOM regClass = RegisterClassA(&wndClass);
 
-	uoAssistHwnd = CreateWindowExA(0, "UOASSIST-TP-MSG-WND", "UOASSIST-TP-MSG-WND", 0x0CF0000, 0, 0, 50, 50, 0, 0, thishModule, 0);
+	uoAssistHwnd = CreateWindowExA(0, "UOASSIST-TP-MSG-WND", "UOASSIST-TP-MSG-WND", WS_OVERLAPPEDWINDOW, 0, 0, 50, 50, 0, 0, hInstance, 0);
 
 	ShowWindow(uoAssistHwnd, 0);
 
-	PostMessageA(clienthWnd, 0x400, flags, (LPARAM)razorhwnd);
+	PostMessageA(clienthWnd, UONET_RAZORINIT, flags, (LPARAM)razorhwnd);
 	return SUCCESS;
 }
 
@@ -549,9 +589,6 @@ int DLLEXPORT HandleNegotiate(ULONG features)
 
 int DLLEXPORT InitializeLibrary(LPCSTR version)
 {
-	//	AllocConsole();
-	//	consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-
 	return 1;
 }
 
@@ -559,7 +596,7 @@ VOID DLLEXPORT Shutdown(BOOL closeClient)
 {
 	if (IsWindow(uoAssistHwnd))
 	{
-		UnregisterClassA("UOASSIST-TP-MSG-WND", thishModule);
+		UnregisterClassA("UOASSIST-TP-MSG-WND", hInstance);
 		SendMessageA(uoAssistHwnd, 0x10, 0, 0);
 	}
 
@@ -612,7 +649,7 @@ VOID DLLEXPORT CalibratePosition(int x, int y, int z)
 	dataBuffer->X = x;
 	dataBuffer->Y = y;
 	dataBuffer->Z = z;
-	PostMessageA(clienthWnd, 0x401, 0x10, 0x00);
+	PostMessageA(clienthWnd, UONET_MESSAGE, 0x10, 0x00);
 }
 
 VOID DLLEXPORT GetPosition(int *x, int *y, int *z)

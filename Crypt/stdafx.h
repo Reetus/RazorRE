@@ -25,3 +25,5 @@
 #include "Log.h"
 #include "Memory.h"
 #include "Misc.h"
+#include "UOArt.h"
+#include "Titlebar.h"

@@ -1,3 +1,4 @@
+#pragma once
 #pragma pack(1)
 #include "stdafx.h"
 #include "Shlwapi.h"
@@ -67,6 +68,15 @@ private:
 		int extra;
 	} ENTRY3D;
 
+	typedef struct ImageData
+	{
+		int originalWidth;
+		int originalHeight;
+		HBITMAP originalBitmap;
+		int width;
+		int height;
+		HBITMAP bitmap;
+	} IMAGEDATA;
 
 	static CHAR _dataPath[MAX_PATH];
 	static BOOL _loaded;
@@ -74,8 +84,8 @@ private:
 	static BOOL _isUOPFormat;
 public:
 	static BOOL Init(LPCSTR dataPath);
-	static void LoadUOP(LPCSTR fileName);
-	static void LoadMUL(LPCSTR dataPath);
+	static BOOL LoadUOP(LPCSTR fileName);
+	static BOOL LoadMUL(LPCSTR dataPath);
 	static INT64 HashFileName(PCHAR s);
-	static HBITMAP LoadStatic(int itemId);
+	static IMAGEDATA *LoadStatic(int itemId);
 };

@@ -43,6 +43,11 @@ struct DataBuffer
 	struct Buffer logMessage;
 };
 
+#define UONET_RAZORINIT WM_USER
+#define UONET_MESSAGE WM_USER+1
+#define UONET_TITLEBAR WM_USER+2
+
+
 enum UONetMessage
 {
 	UONET_SEND = 1,
@@ -53,8 +58,8 @@ enum UONetMessage
 	UONET_DISCONNECT = 6,
 	UONET_KEYDOWN = 7,
 	UONET_MOUSE = 8,
-	Activate = 9,
-	Focus = 10,
+	UONET_ACTIVATE = 9,
+	UONET_FOCUS = 10,
 	Close = 11,
 	StatBar = 12,
 	NotoHue = 13,
@@ -113,6 +118,7 @@ extern BOOL mustCompress;
 extern SOCKET serverSocket;
 extern struct DataBuffer *dataBuffer;
 extern struct uo_decompression decompress;
+extern BOOL preServerList;
 
 // Typedefs
 typedef int (WINAPI *TRANSLATESETUP)();

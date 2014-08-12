@@ -23,7 +23,7 @@ void LogPrintfR(char *fmt, ...)
 	strcpy((PCHAR)ptr, buf);
 	dataBuffer->logMessage.Length += strlen(buf);
 	ReleaseMutex(mutex);
-	PostMessage(FindUOWindow(), 0x401, UONET_LOGMESSAGE, 0);
+	PostMessage(FindUOWindow(), UONET_MESSAGE, UONET_LOGMESSAGE, 0);
 }
 
 void LogPrintf(char *fmt, ...) 

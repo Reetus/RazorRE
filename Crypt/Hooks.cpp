@@ -5,6 +5,7 @@ SELECT oldSelect;
 CLOSESOCKET oldClosesocket;
 CONNECT oldConnect;
 RECV oldRecv;
+BOOL preServerList = TRUE;
 
 VOID InstallApiHooks()
 {
@@ -18,33 +19,45 @@ VOID InstallApiHooks()
 DWORD WINAPI newClosesocket(SOCKET s)
 {
 	int ret = oldClosesocket(s);
-	WaitForSingleObject(mutex, -1);
 
-	mustDecompress = false;
-	serverSocket = 0;
-	ReleaseMutex(mutex);
+	if (s == serverSocket)
+	{
+		WaitForSingleObject(mutex, -1);
 
-	//	PostMessageA(razorhWnd, 0x401, UONET_NOTREADY, 0);
-	//	PostMessageA(razorhWnd, 0x401, UONET_DISCONNECT, 0);
+		mustDecompress = false;
+		serverSocket = 0;
+		ReleaseMutex(mutex);
 
+		//	PostMessageA(razorhWnd, UONET_MESSAGE, UONET_NOTREADY, 0);
+		PostMessageA(razorhWnd, UONET_MESSAGE, UONET_DISCONNECT, 0);
+	}
+	LogPrintf("newClosesocket(%d)\r\n", s);
 	return ret;
 }
 
 DWORD WINAPI newConnect(SOCKET s, const struct sockaddr *name, int namelen)
 {
-	PostMessageA(razorhWnd, 0x401, UONET_CONNECT, 0);
-	serverSocket = s;
-	if (dataBuffer != NULL) 
+	struct sockaddr_in *sin = (struct sockaddr_in*)name;
+
+	if (preServerList)
 	{
-		sockaddr_in newsockaddr;
-		newsockaddr.sin_family = AF_INET;
-		newsockaddr.sin_addr.s_addr = dataBuffer->serverIp;
-		newsockaddr.sin_port = htons(dataBuffer->serverPort);
-		unsigned char *ptr = (unsigned char*)&dataBuffer->serverIp;
-		LogPrintf("newConnect: %d.%d.%d.%d,2593\r\n", ptr[0], ptr[1], ptr[2], ptr[3], dataBuffer->serverPort);
-		return oldConnect(s, (SOCKADDR *)&newsockaddr, sizeof(newsockaddr));
+		sin->sin_addr.S_un.S_addr = dataBuffer->serverIp;
+		sin->sin_port = htons(dataBuffer->serverPort);
 	}
-	return oldConnect(s, name, namelen);
+
+	LogPrintf("newConnect(%d): %s,%d, %d\r\n", s, inet_ntoa(sin->sin_addr), ntohs(sin->sin_port), preServerList);
+
+	int ret = oldConnect(s, name, namelen);
+	if (ret != SOCKET_ERROR)
+	{
+		WaitForSingleObject(mutex, -1);
+		serverSocket = s;
+		ReleaseMutex(mutex);
+
+		PostMessageA(razorhWnd, 0x401, UONET_CONNECT, 0);
+	}
+
+	return ret;
 }
 
 DWORD WINAPI newRecv(SOCKET s, char *buf, int buflen, int flags)
@@ -66,9 +79,6 @@ DWORD WINAPI newRecv(SOCKET s, char *buf, int buflen, int flags)
 		if (((unsigned char*)buff)[0] == (unsigned char)0xB9)
 		{
 			mustCompress = true;
-
-			//TODO: Find out when this is really sent
-			PostMessageA(razorhWnd, 0x401, UONET_READY, 0);
 		}
 
 		if (mustCompress) {
@@ -134,9 +144,15 @@ DWORD WINAPI newSelect(int nfds, PFD_SET readfds, PFD_SET writefds, PFD_SET exce
 			if ((BYTE)decomBuffer[0] == (BYTE)0xB9)
 				mustCompress = true;
 
+			if ((BYTE)decomBuffer[0] == (BYTE)0x8C)
+			{
+				preServerList = false;
+				Log("preServerList = false\r\n");
+			}
+
 			ReleaseMutex(mutex);
 
-			PostMessageA(razorhWnd, 0x401, UONET_RECV, 0);
+			PostMessageA(razorhWnd, UONET_MESSAGE, UONET_RECV, 0);
 		}
 	}
 	int ret = oldSelect(nfds, readfds, writefds, exceptfds, timeout);
@@ -185,7 +201,7 @@ DWORD WINAPI newSend(SOCKET s, const char *buf, int len, int flags)
 		}
 
 		ReleaseMutex(mutex);
-		PostMessageA(razorhWnd, 0x401, UONET_SEND, 0);
+		PostMessageA(razorhWnd, UONET_MESSAGE, UONET_SEND, 0);
 	} else {
 		ret = oldSend(s, buf, len, flags);
 	}

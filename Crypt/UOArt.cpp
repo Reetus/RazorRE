@@ -10,13 +10,15 @@ BOOL UOArt::_isUOPFormat = false;
 
 BOOL UOArt::Init(LPCSTR datapath)
 {
+	Log("UOArt::Init()\r\n");
 	CHAR UOPPath[MAX_PATH];
 	CHAR MULPath[MAX_PATH];
+
 	strcpy_s(_dataPath, MAX_PATH, datapath);
 	_loaded = false;
 
-	PathCombineA(UOPPath, datapath, "artLegacyMUL.uop");
-	PathCombineA(MULPath, datapath, "artidx.mul");
+	PathCombineA(UOPPath, _dataPath, "artLegacyMUL.uop");
+	PathCombineA(MULPath, _dataPath, "artidx.mul");
 
 	if (GetFileAttributesA(UOPPath) != -1) 
 	{
@@ -34,13 +36,17 @@ BOOL UOArt::Init(LPCSTR datapath)
 	return _loaded;
 }
 
-void UOArt::LoadMUL(LPCSTR fileName)
+BOOL UOArt::LoadMUL(LPCSTR fileName)
 {
+	Log("UOArt::LoadMUL()\r\n");
 	HANDLE fileHandle;
 
 	fileHandle = CreateFileA(fileName, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (fileHandle == INVALID_HANDLE_VALUE)
-		return;
+	{
+		LogPrintf("UOArt::LoadMUL() GetLastError %d\r\n", GetLastError());
+		return false;
+	}
 
 	DWORD bytesRead;
 	ENTRY3D entry3d;
@@ -48,20 +54,22 @@ void UOArt::LoadMUL(LPCSTR fileName)
 	do {
 		ReadFile(fileHandle, &entry3d, sizeof(ENTRY3D), &bytesRead, NULL);
 		_index[index++] = entry3d;
+		//LogPrintf("UOArt::LoadMUL() _index size = %d\r\n", _index.size());
 	} 
 	while (bytesRead > 0);
 
 	CloseHandle(fileHandle);
+	return true;
 }
 
-void UOArt::LoadUOP(LPCSTR fileName)
+BOOL UOArt::LoadUOP(LPCSTR fileName)
 {
 	HANDLE fileHandle;
 
 	fileHandle = CreateFileA(fileName, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
 	if (fileHandle == INVALID_HANDLE_VALUE)
-		return;
+		return false;
 
 	FORMATHEADER formatHeader;
 	DWORD bytesRead;
@@ -109,15 +117,16 @@ void UOArt::LoadUOP(LPCSTR fileName)
 
 	hashes.clear();
 	CloseHandle(fileHandle);
+	return true;
 }
 
-HBITMAP UOArt::LoadStatic(int itemId)
+UOArt::IMAGEDATA *UOArt::LoadStatic(int itemId)
 {
 	CHAR fileName[MAX_PATH];
 	HANDLE fileHandle;
 
 	if (!_loaded)
-		return false;
+		return NULL;
 
 	itemId += 0x4000;
 
@@ -129,7 +138,7 @@ HBITMAP UOArt::LoadStatic(int itemId)
 	fileHandle = CreateFileA(fileName, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
 	if (fileHandle == INVALID_HANDLE_VALUE)
-		return false;
+		return NULL;
 
 	int lookup = _index[itemId].lookup;
 	int length = _index[itemId].length;
@@ -155,18 +164,25 @@ HBITMAP UOArt::LoadStatic(int itemId)
 		lookups[i] = (int)(start + (bindata[count++]));
 
 	PUSHORT image = new USHORT[width*height];
-	memset(image, 0, (width*height)*2);
+	memset(image, 0x0, (width*height)*2);
+
+	int smallestX, largestX = 0;
+	smallestX = width;
+
+	int smallestY, largestY = 0;
+	smallestY = height;
 
 	int delta = width;
 	USHORT* line = (USHORT*)image;
 
-	for (int y = 0; y < height;++y, line += delta) 
+	for (int y = 0; y < height; y++, line += delta) 
 	{
 		count = lookups[y];
 		USHORT runOffset = 0, runLength = 0;
 
 		USHORT* cur = line;
 		USHORT* end;
+		int x = 0;
 
 		while (true) 
 		{
@@ -179,22 +195,40 @@ HBITMAP UOArt::LoadStatic(int itemId)
 				break;
 			}
 
-			if (runOffset > delta)
+			if (runLength == 0 || runOffset > delta)
 				break;
+
+			if (y > largestY)
+				largestY = y+1;
+
+			if (y < smallestY)
+				smallestY = y;
 
 			cur += runOffset;
 
 			if (runOffset + runLength > delta)
 				break;
 
+			x += runOffset;
+
+			if (x < smallestX)
+				smallestX = x;
+
 			end = cur + runLength;
 
 			while (cur < end)
 			{
 				*(cur++) = (USHORT)(bindata[count++] ^ 0x8000);
+				x++;
 			}
+
+			if (x > largestX)
+				largestX = x;
 		}
 	}
+
+	int realWidth = largestX - smallestX;
+	int realHeight = largestY - smallestY;
 
 	BITMAPINFO bmi = { 0 };
 	bmi.bmiHeader.biPlanes = 1;
@@ -202,12 +236,33 @@ HBITMAP UOArt::LoadStatic(int itemId)
 	bmi.bmiHeader.biWidth = width;
 	bmi.bmiHeader.biHeight = -height;
 	bmi.bmiHeader.biSize = sizeof(BITMAPINFO);
-	
+
 	UINT *pixels;
 	HBITMAP bitmap = CreateDIBSection(GetWindowDC(GetDesktopWindow()), &bmi, DIB_RGB_COLORS, (void**)&pixels, NULL, 0);
 	memcpy(pixels, image, (width*height)*2);
+
+	HDC hSrc = CreateCompatibleDC(0);
+	SelectObject(hSrc, bitmap);
+	HDC hDest = CreateCompatibleDC(hSrc);
+	HBITMAP realBitmap = CreateCompatibleBitmap(hSrc, realWidth, realHeight);
+	SelectObject(hDest, realBitmap);
+
+	BitBlt(hDest, 0, 0, realWidth, realHeight, hSrc, smallestX, smallestY, SRCCOPY);
+
+	DeleteDC(hSrc);
+	DeleteDC(hDest);
+
 	CloseHandle(fileHandle);
-	return bitmap;
+
+	IMAGEDATA *imageData = new IMAGEDATA;
+	imageData->originalWidth = width;
+	imageData->originalHeight = height;
+	imageData->originalBitmap = bitmap;
+	imageData->width = realWidth;
+	imageData->height = realHeight;
+	imageData->bitmap = realBitmap;
+
+	return imageData;
 }
 
 INT64 UOArt::HashFileName(PCHAR s)
