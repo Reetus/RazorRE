@@ -1,3 +1,6 @@
 [submodule "Razor"]
 	path = Razor
 	url = https://github.com/Reetus/razor
+[submodule "UltimaSDK"]
+	path = UltimaSDK
+	url = https://github.com/Reetus/ultimasdk
